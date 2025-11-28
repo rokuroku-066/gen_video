@@ -23,17 +23,20 @@ motion_hint = st.text_input(
     "動きのヒント（任意）",
     placeholder="カメラがゆっくり寄る／滑らかな動き",
 )
-ref_file = st.file_uploader("参照画像（任意）", type=["png", "jpg", "jpeg"])
+ref_file = st.file_uploader("参照画像（任意）", type=["png", "jpg", "jpeg"], key="ref_uploader")
+st.caption(
+    "参照画像はキャラクターや色調の一貫性を保つための手がかりになります。アップロードするとサムネイルが表示されます。"
+)
 
 if not is_real_api_enabled():
     st.info("実際のAPI呼び出しは現在無効です。フルパイプラインを動かすには環境変数 ENABLE_REAL_GENAI=1 を設定してください。")
 
 
-def _save_uploaded_file(upload) -> Path:
-    suffix = Path(upload.name).suffix or ".png"
+def _save_uploaded_file(filename: str, data: bytes) -> Path:
+    suffix = Path(filename).suffix or ".png"
     temp_dir = Path(tempfile.mkdtemp(prefix="ref_image_"))
     target = temp_dir / f"reference{suffix}"
-    target.write_bytes(upload.read())
+    target.write_bytes(data)
     return target
 
 
@@ -44,11 +47,38 @@ state.setdefault("frame_paths", None)
 state.setdefault("final_video_path", None)
 state.setdefault("selected_frames", [])
 state.setdefault("ref_path", None)
+state.setdefault("ref_preview", None)
 
 
 def _reset_generation_state():
     for key in ["run_dir", "prompts_data", "frame_paths", "final_video_path", "selected_frames", "ref_path"]:
         state.pop(key, None)
+
+
+def _sync_ref_preview(upload):
+    if upload:
+        image_bytes = upload.getvalue()
+        state.ref_preview = {
+            "bytes": image_bytes,
+            "name": upload.name,
+            "size_bytes": len(image_bytes),
+        }
+        state.ref_path = None
+        upload.seek(0)
+    elif state.get("ref_preview"):
+        state.ref_preview = None
+        state.ref_path = None
+
+
+_sync_ref_preview(ref_file)
+
+if state.ref_preview:
+    preview_col, meta_col = st.columns([1, 1.2])
+    preview_col.image(state.ref_preview["bytes"], caption="参照画像プレビュー", use_column_width=True)
+    size_kb = state.ref_preview["size_bytes"] / 1024
+    meta_col.markdown(
+        f"**{state.ref_preview['name']}**\n\n{size_kb:.1f} KB\n\nアップロードした画像はスタイルの一貫性を保つための基準として使用されます。"
+    )
 
 
 if st.button("キーフレームを生成"):
@@ -59,8 +89,8 @@ if st.button("キーフレームを生成"):
         cfg = get_default_config()
         run_dir = make_run_directory(cfg)
         ref_path: Path | None = None
-        if ref_file:
-            ref_path = _save_uploaded_file(ref_file)
+        if state.ref_preview:
+            ref_path = _save_uploaded_file(state.ref_preview["name"], state.ref_preview["bytes"])
         with st.spinner("キーフレームを生成中です…"):
             try:
                 prompts_data, frame_paths = generate_initial_frames(
@@ -99,12 +129,18 @@ if state.frame_paths and state.prompts_data:
     if st.button("選択したフレームを再生成", disabled=not selection):
         with st.spinner("フレームを再生成中です…"):
             try:
+                ref_image_path = state.ref_path
+                if state.ref_preview and not ref_image_path:
+                    ref_image_path = _save_uploaded_file(
+                        state.ref_preview["name"], state.ref_preview["bytes"]
+                    )
+                    state.ref_path = ref_image_path
                 updated_paths = regenerate_keyframe_images(
                     state.prompts_data,
                     state.frame_paths,
                     run_dir=state.run_dir,
                     frame_ids=selection,
-                    ref_image_path=state.ref_path,
+                    ref_image_path=ref_image_path,
                 )
             except Exception as exc:  # noqa: BLE001
                 st.error(f"再生成に失敗しました: {exc}")
