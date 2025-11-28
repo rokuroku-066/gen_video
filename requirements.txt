@@ -1,0 +1,6 @@
+google-genai
+streamlit
+pillow
+python-dotenv
+pytest
+altair<5

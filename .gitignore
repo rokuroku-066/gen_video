@@ -1,0 +1,31 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.python-version
+*.egg-info/
+.eggs/
+build/
+dist/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE / editor
+.idea/
+.vscode/
+
+# Project outputs
+outputs/
+
+# OS noise
+.DS_Store
+Thumbs.db
