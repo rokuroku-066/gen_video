@@ -17,18 +17,6 @@ st.markdown(
     "Geminiプロンプト、Gemini 2.5 Flash Image、Veoクリップを使って、スタイルが一貫したマルチセグメント動画を生成します。"
 )
 
-theme = st.text_area("テーマ", height=120, placeholder="夜のネオン屋上を歩く光る妖精...")
-num_frames = st.number_input("キーフレーム数", min_value=2, max_value=8, value=3, step=1)
-motion_hint = st.text_input(
-    "動きのヒント（任意）",
-    placeholder="カメラがゆっくり寄る／滑らかな動き",
-)
-ref_file = st.file_uploader("参照画像（任意）", type=["png", "jpg", "jpeg"])
-
-if not is_real_api_enabled():
-    st.info("実際のAPI呼び出しは現在無効です。フルパイプラインを動かすには環境変数 ENABLE_REAL_GENAI=1 を設定してください。")
-
-
 def _save_uploaded_file(upload) -> Path:
     suffix = Path(upload.name).suffix or ".png"
     temp_dir = Path(tempfile.mkdtemp(prefix="ref_image_"))
@@ -44,76 +32,128 @@ state.setdefault("frame_paths", None)
 state.setdefault("final_video_path", None)
 state.setdefault("selected_frames", [])
 state.setdefault("ref_path", None)
+state.setdefault("step1_complete", False)
+state.setdefault("step2_complete", False)
+state.setdefault("step3_complete", False)
 
 
 def _reset_generation_state():
     for key in ["run_dir", "prompts_data", "frame_paths", "final_video_path", "selected_frames", "ref_path"]:
         state.pop(key, None)
+    state.update(step1_complete=False, step2_complete=False, step3_complete=False)
 
 
-if st.button("キーフレームを生成"):
-    if not theme.strip():
-        st.error("テーマを入力してください。")
-    else:
-        _reset_generation_state()
-        cfg = get_default_config()
-        run_dir = make_run_directory(cfg)
-        ref_path: Path | None = None
-        if ref_file:
-            ref_path = _save_uploaded_file(ref_file)
-        with st.spinner("キーフレームを生成中です…"):
-            try:
-                prompts_data, frame_paths = generate_initial_frames(
-                    theme=theme,
-                    num_frames=int(num_frames),
-                    run_dir=run_dir,
-                    ref_image_path=ref_path,
-                    motion_hint=motion_hint or None,
-                )
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"画像の生成に失敗しました: {exc}")
-            else:
-                state.run_dir = run_dir
-                state.prompts_data = prompts_data
-                state.frame_paths = frame_paths
-                state.ref_path = ref_path
-                st.success("キーフレームの生成が完了しました。レビューしてください。")
+def _render_step_indicator():
+    steps = [
+        ("1. テーマと設定", True, state.step1_complete),
+        ("2. キーフレーム確認/再生成", state.step1_complete, state.step2_complete),
+        ("3. 動画生成", state.step2_complete, state.step3_complete),
+    ]
+    completed = sum(int(complete) for _, __, complete in steps)
+    st.progress(completed / len(steps), text="進行状況")
+    cols = st.columns(len(steps))
+    for col, (label, unlocked, complete) in zip(cols, steps):
+        status = "✅" if complete else ("🟢" if unlocked else "🔒")
+        col.markdown(f"{status} {label}")
 
 
-if state.frame_paths and state.prompts_data:
-    st.subheader("生成されたキーフレーム")
-    columns = st.columns(2)
-    for idx, frame in enumerate(state.prompts_data.get("frames", [])):
-        frame_id = frame.get("id") or "?"
-        prompt_text = frame.get("prompt") or ""
-        with columns[idx % 2]:
-            st.image(state.frame_paths.get(frame_id), caption=f"Frame {frame_id}")
-            st.caption(prompt_text)
+_render_step_indicator()
 
-    frame_ids = [frame.get("id") or "?" for frame in state.prompts_data.get("frames", [])]
-    selection = st.multiselect(
-        "再生成したいフレームを選択", frame_ids, default=state.get("selected_frames", [])
+tabs = st.tabs(["テーマと設定", "キーフレーム確認/再生成", "動画生成"])
+
+with tabs[0]:
+    theme = st.text_area("テーマ", height=120, placeholder="夜のネオン屋上を歩く光る妖精...")
+    num_frames = st.number_input("キーフレーム数", min_value=2, max_value=8, value=3, step=1)
+    motion_hint = st.text_input(
+        "動きのヒント（任意）",
+        placeholder="カメラがゆっくり寄る／滑らかな動き",
     )
-    state.selected_frames = selection
+    ref_file = st.file_uploader("参照画像（任意）", type=["png", "jpg", "jpeg"])
 
-    if st.button("選択したフレームを再生成", disabled=not selection):
-        with st.spinner("フレームを再生成中です…"):
-            try:
-                updated_paths = regenerate_keyframe_images(
-                    state.prompts_data,
-                    state.frame_paths,
-                    run_dir=state.run_dir,
-                    frame_ids=selection,
-                    ref_image_path=state.ref_path,
-                )
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"再生成に失敗しました: {exc}")
-            else:
-                state.frame_paths = updated_paths
-                state.final_video_path = None
-                st.success("選択したフレームを再生成しました。")
+    if not is_real_api_enabled():
+        st.info("実際のAPI呼び出しは現在無効です。フルパイプラインを動かすには環境変数 ENABLE_REAL_GENAI=1 を設定してください。")
 
-    if st.button("レビュー済みフレームで動画を生成"):
+    if st.button("キーフレームを生成"):
+        if not theme.strip():
+            st.error("テーマを入力してください。")
+        else:
+            _reset_generation_state()
+            cfg = get_default_config()
+            run_dir = make_run_directory(cfg)
+            ref_path: Path | None = None
+            if ref_file:
+                ref_path = _save_uploaded_file(ref_file)
+            with st.spinner("キーフレームを生成中です…"):
+                try:
+                    prompts_data, frame_paths = generate_initial_frames(
+                        theme=theme,
+                        num_frames=int(num_frames),
+                        run_dir=run_dir,
+                        ref_image_path=ref_path,
+                        motion_hint=motion_hint or None,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    st.error(f"画像の生成に失敗しました: {exc}")
+                else:
+                    state.run_dir = run_dir
+                    state.prompts_data = prompts_data
+                    state.frame_paths = frame_paths
+                    state.ref_path = ref_path
+                    state.step1_complete = True
+                    state.step2_complete = False
+                    state.step3_complete = False
+                    st.success("キーフレームの生成が完了しました。レビューしてください。")
+
+
+with tabs[1]:
+    if not state.step1_complete:
+        st.info("まずは『テーマと設定』タブでキーフレームを生成してください。")
+    if state.frame_paths and state.prompts_data:
+        st.subheader("生成されたキーフレーム")
+        columns = st.columns(2)
+        for idx, frame in enumerate(state.prompts_data.get("frames", [])):
+            frame_id = frame.get("id") or "?"
+            prompt_text = frame.get("prompt") or ""
+            with columns[idx % 2]:
+                st.image(state.frame_paths.get(frame_id), caption=f"Frame {frame_id}")
+                st.caption(prompt_text)
+
+        frame_ids = [frame.get("id") or "?" for frame in state.prompts_data.get("frames", [])]
+        selection = st.multiselect(
+            "再生成したいフレームを選択", frame_ids, default=state.get("selected_frames", [])
+        )
+        state.selected_frames = selection
+
+        if st.button("選択したフレームを再生成", disabled=not selection or not state.step1_complete):
+            with st.spinner("フレームを再生成中です…"):
+                try:
+                    updated_paths = regenerate_keyframe_images(
+                        state.prompts_data,
+                        state.frame_paths,
+                        run_dir=state.run_dir,
+                        frame_ids=selection,
+                        ref_image_path=state.ref_path,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    st.error(f"再生成に失敗しました: {exc}")
+                else:
+                    state.frame_paths = updated_paths
+                    state.final_video_path = None
+                    state.step2_complete = False
+                    state.step3_complete = False
+                    st.success("選択したフレームを再生成しました。")
+
+        if st.button("フレーム確認済みとして次へ進む", disabled=not state.step1_complete):
+            state.step2_complete = True
+            state.step3_complete = False
+            st.success("フレーム確認が完了しました。『動画生成』タブへ進んでください。")
+
+
+with tabs[2]:
+    if not state.step2_complete:
+        st.info("『キーフレーム確認/再生成』タブでフレーム確認を完了してください。")
+
+    if st.button("レビュー済みフレームで動画を生成", disabled=not state.step2_complete):
         with st.spinner("動画を生成中です。しばらくお待ちください。"):
             try:
                 final_path = build_video_from_frames(
@@ -125,14 +165,15 @@ if state.frame_paths and state.prompts_data:
                 st.error(f"動画の生成に失敗しました: {exc}")
             else:
                 state.final_video_path = final_path
+                state.step3_complete = True
                 st.success("生成が完了しました！")
 
-if state.final_video_path:
-    st.video(str(state.final_video_path))
-    with open(state.final_video_path, "rb") as f:
-        st.download_button(
-            "動画をダウンロード",
-            data=f,
-            file_name=Path(state.final_video_path).name,
-            mime="video/mp4",
-        )
+    if state.final_video_path:
+        st.video(str(state.final_video_path))
+        with open(state.final_video_path, "rb") as f:
+            st.download_button(
+                "動画をダウンロード",
+                data=f,
+                file_name=Path(state.final_video_path).name,
+                mime="video/mp4",
+            )
