@@ -5,8 +5,9 @@ from pathlib import Path
 
 import streamlit as st
 
-from video_pipeline.config import is_real_api_enabled
-from video_pipeline.run_pipeline import run_pipeline
+from video_pipeline.config import get_default_config, is_real_api_enabled, make_run_directory
+from video_pipeline.images import regenerate_keyframe_images
+from video_pipeline.run_pipeline import build_video_from_frames, generate_initial_frames
 
 
 st.set_page_config(page_title="Gemini + Veo アニメーションビルダー", layout="centered")
@@ -36,30 +37,102 @@ def _save_uploaded_file(upload) -> Path:
     return target
 
 
-if st.button("動画を生成"):
+state = st.session_state
+state.setdefault("run_dir", None)
+state.setdefault("prompts_data", None)
+state.setdefault("frame_paths", None)
+state.setdefault("final_video_path", None)
+state.setdefault("selected_frames", [])
+state.setdefault("ref_path", None)
+
+
+def _reset_generation_state():
+    for key in ["run_dir", "prompts_data", "frame_paths", "final_video_path", "selected_frames", "ref_path"]:
+        state.pop(key, None)
+
+
+if st.button("キーフレームを生成"):
     if not theme.strip():
         st.error("テーマを入力してください。")
     else:
+        _reset_generation_state()
+        cfg = get_default_config()
+        run_dir = make_run_directory(cfg)
         ref_path: Path | None = None
         if ref_file:
             ref_path = _save_uploaded_file(ref_file)
-        with st.spinner("動画を生成中です。しばらくお待ちください。"):
+        with st.spinner("キーフレームを生成中です…"):
             try:
-                final_path = run_pipeline(
+                prompts_data, frame_paths = generate_initial_frames(
                     theme=theme,
                     num_frames=int(num_frames),
+                    run_dir=run_dir,
                     ref_image_path=ref_path,
                     motion_hint=motion_hint or None,
                 )
-            except Exception as exc:  # noqa: BLE001 - display errors in UI
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"画像の生成に失敗しました: {exc}")
+            else:
+                state.run_dir = run_dir
+                state.prompts_data = prompts_data
+                state.frame_paths = frame_paths
+                state.ref_path = ref_path
+                st.success("キーフレームの生成が完了しました。レビューしてください。")
+
+
+if state.frame_paths and state.prompts_data:
+    st.subheader("生成されたキーフレーム")
+    columns = st.columns(2)
+    for idx, frame in enumerate(state.prompts_data.get("frames", [])):
+        frame_id = frame.get("id") or "?"
+        prompt_text = frame.get("prompt") or ""
+        with columns[idx % 2]:
+            st.image(state.frame_paths.get(frame_id), caption=f"Frame {frame_id}")
+            st.caption(prompt_text)
+
+    frame_ids = [frame.get("id") or "?" for frame in state.prompts_data.get("frames", [])]
+    selection = st.multiselect(
+        "再生成したいフレームを選択", frame_ids, default=state.get("selected_frames", [])
+    )
+    state.selected_frames = selection
+
+    if st.button("選択したフレームを再生成", disabled=not selection):
+        with st.spinner("フレームを再生成中です…"):
+            try:
+                updated_paths = regenerate_keyframe_images(
+                    state.prompts_data,
+                    state.frame_paths,
+                    run_dir=state.run_dir,
+                    frame_ids=selection,
+                    ref_image_path=state.ref_path,
+                )
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"再生成に失敗しました: {exc}")
+            else:
+                state.frame_paths = updated_paths
+                state.final_video_path = None
+                st.success("選択したフレームを再生成しました。")
+
+    if st.button("レビュー済みフレームで動画を生成"):
+        with st.spinner("動画を生成中です。しばらくお待ちください。"):
+            try:
+                final_path = build_video_from_frames(
+                    run_dir=state.run_dir,
+                    prompts_data=state.prompts_data,
+                    frame_image_paths=state.frame_paths,
+                )
+            except Exception as exc:  # noqa: BLE001
                 st.error(f"動画の生成に失敗しました: {exc}")
             else:
+                state.final_video_path = final_path
                 st.success("生成が完了しました！")
-                st.video(str(final_path))
-                with open(final_path, "rb") as f:
-                    st.download_button(
-                        "動画をダウンロード",
-                        data=f,
-                        file_name=Path(final_path).name,
-                        mime="video/mp4",
-                    )
+
+if state.final_video_path:
+    st.video(str(state.final_video_path))
+    with open(state.final_video_path, "rb") as f:
+        st.download_button(
+            "動画をダウンロード",
+            data=f,
+            file_name=Path(state.final_video_path).name,
+            mime="video/mp4",
+        )
