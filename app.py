@@ -9,23 +9,23 @@ from video_pipeline.config import is_real_api_enabled
 from video_pipeline.run_pipeline import run_pipeline
 
 
-st.set_page_config(page_title="Gemini + Veo Animation Builder", layout="centered")
-st.title("Gemini + Veo Animation Builder")
+st.set_page_config(page_title="Gemini + Veo アニメーションビルダー", layout="centered")
+st.title("Gemini + Veo アニメーションビルダー")
 
 st.markdown(
-    "Generate a multi-segment video with consistent style using Gemini prompts, Gemini 2.5 Flash Image, and Veo clips."
+    "Geminiプロンプト、Gemini 2.5 Flash Image、Veoクリップを使って、スタイルが一貫したマルチセグメント動画を生成します。"
 )
 
-theme = st.text_area("Theme", height=120, placeholder="A glowing fairy walking on a neon rooftop at night...")
-num_frames = st.number_input("Number of keyframes", min_value=2, max_value=8, value=3, step=1)
+theme = st.text_area("テーマ", height=120, placeholder="夜のネオン屋上を歩く光る妖精...")
+num_frames = st.number_input("キーフレーム数", min_value=2, max_value=8, value=3, step=1)
 motion_hint = st.text_input(
-    "Motion hint (optional)",
-    placeholder="Smooth camera drift, gentle movement toward the viewer",
+    "動きのヒント（任意）",
+    placeholder="カメラがゆっくり寄る／滑らかな動き",
 )
-ref_file = st.file_uploader("Reference image (optional)", type=["png", "jpg", "jpeg"])
+ref_file = st.file_uploader("参照画像（任意）", type=["png", "jpg", "jpeg"])
 
 if not is_real_api_enabled():
-    st.info("Real API calls are disabled. Set ENABLE_REAL_GENAI=1 in your environment to run the full pipeline.")
+    st.info("実際のAPI呼び出しは現在無効です。フルパイプラインを動かすには環境変数 ENABLE_REAL_GENAI=1 を設定してください。")
 
 
 def _save_uploaded_file(upload) -> Path:
@@ -36,14 +36,14 @@ def _save_uploaded_file(upload) -> Path:
     return target
 
 
-if st.button("Generate video"):
+if st.button("動画を生成"):
     if not theme.strip():
-        st.error("Please provide a theme before generating.")
+        st.error("テーマを入力してください。")
     else:
         ref_path: Path | None = None
         if ref_file:
             ref_path = _save_uploaded_file(ref_file)
-        with st.spinner("Generating video... this can take a while."):
+        with st.spinner("動画を生成中です。しばらくお待ちください。"):
             try:
                 final_path = run_pipeline(
                     theme=theme,
@@ -52,13 +52,13 @@ if st.button("Generate video"):
                     motion_hint=motion_hint or None,
                 )
             except Exception as exc:  # noqa: BLE001 - display errors in UI
-                st.error(f"Failed to generate video: {exc}")
+                st.error(f"動画の生成に失敗しました: {exc}")
             else:
-                st.success("Generation complete!")
+                st.success("生成が完了しました！")
                 st.video(str(final_path))
                 with open(final_path, "rb") as f:
                     st.download_button(
-                        "Download video",
+                        "動画をダウンロード",
                         data=f,
                         file_name=Path(final_path).name,
                         mime="video/mp4",
