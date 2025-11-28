@@ -104,3 +104,56 @@ def generate_keyframe_images(
         frame_paths[frame_id] = str(image_path)
         prev_image_bytes = image_path.read_bytes()
     return frame_paths
+
+
+def regenerate_keyframe_images(
+    prompts_data,
+    frame_image_paths: Dict[str, str],
+    run_dir: Path,
+    frame_ids: list[str],
+    ref_image_path: Optional[Union[Path, str]] = None,
+    *,
+    client=None,
+    config: Optional[PipelineConfig] = None,
+) -> Dict[str, str]:
+    """
+    Regenerate only the specified frame IDs while keeping other frames intact.
+
+    The regeneration uses the latest prior frame (or the reference image for
+    frame A) as the stylistic anchor to maintain consistency.
+    """
+
+    cfg = config or get_default_config()
+    genai_client = client or get_genai_client()
+    frames_dir = Path(run_dir) / "frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+
+    target_ids = set(frame_ids)
+    prev_image_bytes: Optional[bytes] = None
+    if ref_image_path:
+        prev_image_bytes = Path(ref_image_path).read_bytes()
+
+    updated_paths = dict(frame_image_paths)
+    frames = prompts_data.get("frames", [])
+    for frame in frames:
+        frame_id = frame.get("id") or "X"
+        existing_path = Path(frame_image_paths.get(frame_id, frames_dir / f"frame_{frame_id}.png"))
+        if not existing_path.exists():
+            raise FileNotFoundError(f"Expected existing frame image at {existing_path}")
+
+        if frame_id in target_ids:
+            prompt_text = frame.get("prompt") or ""
+            image_bytes = _generate_image_bytes(
+                prompt_text,
+                prev_image_bytes,
+                client=genai_client,
+                cfg=cfg,
+            )
+            existing_path.write_bytes(image_bytes)
+        else:
+            image_bytes = existing_path.read_bytes()
+
+        updated_paths[frame_id] = str(existing_path)
+        prev_image_bytes = image_bytes
+
+    return updated_paths

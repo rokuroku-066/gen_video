@@ -1,7 +1,8 @@
 # Codex Execution Plans for the Gemini + Veo video generator
 
-This `PLANS.md` describes how to write and maintain execution plans ("ExecPlans") for this repository.  
+This `PLANS.md` describes how to write and maintain execution plans ("ExecPlans") for this repository.
 An ExecPlan is a self‑contained design document that a coding agent (or a human novice) can follow to implement or modify the system.
+All ExecPlan documents live under the `plans/` directory so they are easy to discover and keep together.
 
 The agent that reads ExecPlans **cannot browse the internet** and **cannot open online documentation** for `google-genai`, Veo, or Streamlit. Every ExecPlan in this repo must therefore embed enough detail that a novice can complete the work using only:
 - the current working tree,
@@ -11,7 +12,7 @@ The agent that reads ExecPlans **cannot browse the internet** and **cannot open 
 
 ## How to use ExecPlans in this repository
 
-- When implementing a **non‑trivial feature** (for example: building or refactoring the end‑to‑end video‑generation pipeline, changing API usage, or restructuring the Streamlit UI), first create an ExecPlan file and follow the structure defined in this `PLANS.md`.
+- When implementing a **non‑trivial feature** (for example: building or refactoring the end‑to‑end video‑generation pipeline, changing API usage, or restructuring the Streamlit UI), first create an ExecPlan file under `plans/` and follow the structure defined in this `PLANS.md`.
 - Treat the ExecPlan as a **living document**:
   - Update the `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` sections as work advances.
   - Keep the document self‑contained at all times: if new decisions or constraints appear, write them down in the plan.
@@ -52,7 +53,7 @@ Every ExecPlan in this repo must:
 
 ## Formatting and skeleton of a good ExecPlan
 
-Each ExecPlan file in this repo should contain **one Markdown document** with the following sections, in this order:
+Each ExecPlan file in this repo should contain **one Markdown document** with the following sections, in this order. Store the file under `plans/` and use a descriptive name for multi‑plan repos (e.g., `plans/ExecPlan_image_review.md`):
 
 ```md
 # <Short, action‑oriented description>

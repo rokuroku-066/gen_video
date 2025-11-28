@@ -96,14 +96,15 @@ The two core goals are:
 
 This ExecPlan assumes the repository will be organized roughly as follows:
 
-- `PLANS.md`  
+- `PLANS.md`
   Global guidance on ExecPlans and this project’s expectations.
 
-- `AGENTS.md`  
+- `AGENTS.md`
   Instructions for coding agents on how to work in this repo.
 
-- `ExecPlan.md`  
-  This plan.
+- `plans/`
+  Folder containing this and any other ExecPlans (for example, `plans/ExecPlan_image_review.md`).
+  Keep all plans here so they are easy to find.
 
 - `requirements.txt`  
   Python dependencies.
