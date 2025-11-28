@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Generator, List, Optional
 
 try:
     from google.genai import types  # type: ignore
@@ -119,3 +119,59 @@ def generate_all_segments(
         )
         clip_paths.append(generated)
     return clip_paths
+
+
+def stream_generate_all_segments(
+    frame_image_paths: Dict[str, str],
+    prompts_data,
+    output_dir: Path,
+    *,
+    client=None,
+    config: Optional[PipelineConfig] = None,
+) -> Generator[dict, None, List[str]]:
+    """
+    Yield progress updates while generating all Veo segments.
+
+    Emits "progress" events for each segment and a final "result" with clip paths.
+    """
+
+    cfg = config or get_default_config()
+    genai_client = client or get_genai_client()
+    segments_dir = Path(output_dir) / "segments"
+    segments_dir.mkdir(parents=True, exist_ok=True)
+
+    frames = prompts_data.get("frames", [])
+    clip_paths: List[str] = []
+    total_segments = max(len(frames) - 1, 0)
+    for idx in range(total_segments):
+        first = frames[idx]
+        second = frames[idx + 1]
+        first_id = first.get("id") or f"F{idx}"
+        second_id = second.get("id") or f"F{idx+1}"
+        first_path = Path(frame_image_paths[first_id])
+        second_path = Path(frame_image_paths[second_id])
+        motion_description = second.get("change_from_previous") or "smooth continuation"
+        segment_path = segments_dir / f"segment_{first_id}_{second_id}.mp4"
+
+        yield {
+            "type": "progress",
+            "stage": "segment",
+            "current": idx + 1,
+            "total": total_segments,
+            "message": f"クリップ {idx + 1}/{total_segments} を生成中…",
+            "segment_path": str(segment_path),
+            "from_frame": first_id,
+            "to_frame": second_id,
+        }
+
+        generated = generate_segment_for_pair(
+            first_path,
+            second_path,
+            motion_description,
+            segment_path,
+            client=genai_client,
+            config=cfg,
+        )
+        clip_paths.append(generated)
+
+    yield {"type": "result", "clip_paths": clip_paths}

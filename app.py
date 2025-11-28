@@ -6,8 +6,11 @@ from pathlib import Path
 import streamlit as st
 
 from video_pipeline.config import get_default_config, is_real_api_enabled, make_run_directory
-from video_pipeline.images import regenerate_keyframe_images
-from video_pipeline.run_pipeline import build_video_from_frames, generate_initial_frames
+from video_pipeline.images import stream_regenerate_keyframe_images
+from video_pipeline.run_pipeline import (
+    generate_initial_frames,
+    stream_build_video_from_frames,
+)
 
 
 st.set_page_config(page_title="Gemini + Veo アニメーションビルダー", layout="centered")
@@ -97,35 +100,63 @@ if state.frame_paths and state.prompts_data:
     state.selected_frames = selection
 
     if st.button("選択したフレームを再生成", disabled=not selection):
-        with st.spinner("フレームを再生成中です…"):
-            try:
-                updated_paths = regenerate_keyframe_images(
-                    state.prompts_data,
-                    state.frame_paths,
-                    run_dir=state.run_dir,
-                    frame_ids=selection,
-                    ref_image_path=state.ref_path,
-                )
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"再生成に失敗しました: {exc}")
-            else:
+        progress_placeholder = st.empty()
+        progress_bar = progress_placeholder.progress(0.0)
+        status_placeholder = st.empty()
+        try:
+            updated_paths = None
+            for update in stream_regenerate_keyframe_images(
+                state.prompts_data,
+                state.frame_paths,
+                run_dir=state.run_dir,
+                frame_ids=selection,
+                ref_image_path=state.ref_path,
+            ):
+                if update.get("type") == "progress":
+                    current = float(update.get("current", 0))
+                    total = max(float(update.get("total", 1)), 1.0)
+                    progress_bar.progress(min(1.0, current / total))
+                    status_placeholder.info(update.get("message", ""))
+                elif update.get("type") == "result":
+                    updated_paths = update.get("frame_paths")
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"再生成に失敗しました: {exc}")
+        else:
+            if updated_paths:
                 state.frame_paths = updated_paths
                 state.final_video_path = None
                 st.success("選択したフレームを再生成しました。")
+        finally:
+            progress_placeholder.empty()
+            status_placeholder.empty()
 
     if st.button("レビュー済みフレームで動画を生成"):
-        with st.spinner("動画を生成中です。しばらくお待ちください。"):
-            try:
-                final_path = build_video_from_frames(
-                    run_dir=state.run_dir,
-                    prompts_data=state.prompts_data,
-                    frame_image_paths=state.frame_paths,
-                )
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"動画の生成に失敗しました: {exc}")
-            else:
+        progress_placeholder = st.empty()
+        progress_bar = progress_placeholder.progress(0.0)
+        status_placeholder = st.empty()
+        try:
+            final_path = None
+            for update in stream_build_video_from_frames(
+                run_dir=state.run_dir,
+                prompts_data=state.prompts_data,
+                frame_image_paths=state.frame_paths,
+            ):
+                if update.get("type") == "progress":
+                    current = float(update.get("current", 0))
+                    total = max(float(update.get("total", 1)), 1.0)
+                    progress_bar.progress(min(1.0, current / total))
+                    status_placeholder.info(update.get("message", ""))
+                elif update.get("type") == "result":
+                    final_path = update.get("final_video_path")
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"動画の生成に失敗しました: {exc}")
+        else:
+            if final_path:
                 state.final_video_path = final_path
                 st.success("生成が完了しました！")
+        finally:
+            progress_placeholder.empty()
+            status_placeholder.empty()
 
 if state.final_video_path:
     st.video(str(state.final_video_path))

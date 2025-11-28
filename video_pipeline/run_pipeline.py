@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Union
+from typing import Generator, Optional, Union
 
 from .config import PipelineConfig, get_default_config, make_run_directory
 from .ffmpeg_utils import concat_clips
 from .images import generate_keyframe_images
 from .prompts import generate_frame_prompts
-from .videos import generate_all_segments
+from .videos import generate_all_segments, stream_generate_all_segments
 
 
 def generate_initial_frames(
@@ -69,6 +69,49 @@ def build_video_from_frames(
     final_video_path = Path(run_dir) / "final.mp4"
     concat_clips(clip_paths, final_video_path)
     return str(final_video_path)
+
+
+def stream_build_video_from_frames(
+    run_dir: Path,
+    prompts_data,
+    frame_image_paths,
+    *,
+    client=None,
+    config: Optional[PipelineConfig] = None,
+) -> Generator[dict, None, str]:
+    """Yield progress updates for segment generation and concatenation."""
+
+    cfg = config or get_default_config()
+    clip_paths = []
+    for update in stream_generate_all_segments(
+        frame_image_paths,
+        prompts_data,
+        run_dir,
+        client=client,
+        config=cfg,
+    ):
+        yield update
+        if update.get("type") == "result":
+            clip_paths = update.get("clip_paths", [])
+
+    final_video_path = Path(run_dir) / "final.mp4"
+    if clip_paths:
+        yield {
+            "type": "progress",
+            "stage": "concat",
+            "current": 1,
+            "total": len(clip_paths),
+            "message": f"クリップ 1/{len(clip_paths)} を結合中…",
+        }
+    concat_clips(clip_paths, final_video_path)
+    yield {
+        "type": "progress",
+        "stage": "concat",
+        "current": len(clip_paths),
+        "total": len(clip_paths),
+        "message": "クリップの結合が完了しました。",
+    }
+    yield {"type": "result", "final_video_path": str(final_video_path)}
 
 
 def run_pipeline(

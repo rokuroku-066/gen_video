@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Generator, Optional, Union
 
 try:
     from google.genai import types  # type: ignore
@@ -157,3 +157,73 @@ def regenerate_keyframe_images(
         prev_image_bytes = image_bytes
 
     return updated_paths
+
+
+def stream_regenerate_keyframe_images(
+    prompts_data,
+    frame_image_paths: Dict[str, str],
+    run_dir: Path,
+    frame_ids: list[str],
+    ref_image_path: Optional[Union[Path, str]] = None,
+    *,
+    client=None,
+    config: Optional[PipelineConfig] = None,
+) -> Generator[dict, None, Dict[str, str]]:
+    """
+    Yield progress updates while regenerating selected keyframes.
+
+    Each yielded dict contains keys:
+    - type: "progress" | "result"
+    - current / total: numeric progress counters
+    - message: localized status text
+    - frame_id: current frame identifier (for progress events)
+    """
+
+    cfg = config or get_default_config()
+    genai_client = client or get_genai_client()
+    frames_dir = Path(run_dir) / "frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+
+    target_ids = set(frame_ids)
+    prev_image_bytes: Optional[bytes] = None
+    if ref_image_path:
+        prev_image_bytes = Path(ref_image_path).read_bytes()
+
+    updated_paths = dict(frame_image_paths)
+    frames = prompts_data.get("frames", [])
+    total = len(frames)
+
+    for idx, frame in enumerate(frames, start=1):
+        frame_id = frame.get("id") or "X"
+        existing_path = Path(frame_image_paths.get(frame_id, frames_dir / f"frame_{frame_id}.png"))
+        if not existing_path.exists():
+            raise FileNotFoundError(f"Expected existing frame image at {existing_path}")
+
+        is_target = frame_id in target_ids
+        status = "再生成中" if is_target else "維持中"
+        message = f"{idx}/{total} フレーム{status}…"
+        yield {
+            "type": "progress",
+            "current": idx,
+            "total": total,
+            "message": message,
+            "frame_id": frame_id,
+            "regenerated": is_target,
+        }
+
+        if is_target:
+            prompt_text = frame.get("prompt") or ""
+            image_bytes = _generate_image_bytes(
+                prompt_text,
+                prev_image_bytes,
+                client=genai_client,
+                cfg=cfg,
+            )
+            existing_path.write_bytes(image_bytes)
+        else:
+            image_bytes = existing_path.read_bytes()
+
+        updated_paths[frame_id] = str(existing_path)
+        prev_image_bytes = image_bytes
+
+    yield {"type": "result", "frame_paths": updated_paths}
