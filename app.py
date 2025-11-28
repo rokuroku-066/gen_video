@@ -38,17 +38,30 @@ def _save_uploaded_file(upload) -> Path:
 
 
 state = st.session_state
-state.setdefault("run_dir", None)
-state.setdefault("prompts_data", None)
-state.setdefault("frame_paths", None)
-state.setdefault("final_video_path", None)
-state.setdefault("selected_frames", [])
-state.setdefault("ref_path", None)
+
+_STATE_DEFAULTS: dict[str, object | None] = {
+    "run_dir": None,
+    "prompts_data": None,
+    "frame_paths": None,
+    "final_video_path": None,
+    "selected_frames": [],
+    "ref_path": None,
+}
 
 
-def _reset_generation_state():
-    for key in ["run_dir", "prompts_data", "frame_paths", "final_video_path", "selected_frames", "ref_path"]:
-        state.pop(key, None)
+def _ensure_session_defaults() -> None:
+    for key, value in _STATE_DEFAULTS.items():
+        state.setdefault(key, value)
+
+
+_ensure_session_defaults()
+
+
+def _reset_generation_state() -> None:
+    for key, value in _STATE_DEFAULTS.items():
+        # Replace with fresh defaults so downstream attribute access is safe even after failures.
+        # Lists get re-created to avoid sharing instances across resets.
+        state[key] = [] if isinstance(value, list) else value
 
 
 if st.button("キーフレームを生成"):
