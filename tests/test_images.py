@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import pytest
 
@@ -26,9 +27,9 @@ def test_regenerate_keyframe_images_overwrites_selected(monkeypatch, tmp_path):
         ]
     }
 
-    calls: list[tuple[str, bytes | None]] = []
+    calls: list[tuple[str, Optional[bytes]]] = []
 
-    def fake_generate_image_bytes(prompt_text: str, ref_bytes: bytes | None, *, client, cfg):
+    def fake_generate_image_bytes(prompt_text: str, ref_bytes: Optional[bytes], *, client, cfg):
         calls.append((prompt_text, ref_bytes))
         ref_marker = ref_bytes.decode() if ref_bytes else "none"
         return f"new-{prompt_text}-from-{ref_marker}".encode()

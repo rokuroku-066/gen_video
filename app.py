@@ -10,8 +10,8 @@ from video_pipeline.images import regenerate_keyframe_images
 from video_pipeline.run_pipeline import build_video_from_frames, generate_initial_frames
 
 
-st.set_page_config(page_title="Gemini + Veo アニメーションビルダー", layout="centered")
-st.title("Gemini + Veo アニメーションビルダー")
+st.set_page_config(page_title="AIアニメーションビルダー", layout="centered")
+st.title("AIアニメーションビルダー")
 
 st.markdown(
     "Geminiプロンプト、Gemini 2.5 Flash Image、Veoクリップを使って、スタイルが一貫したマルチセグメント動画を生成します。"
@@ -50,7 +50,7 @@ def _render_step_indicator():
         ("3. 動画生成", state.step2_complete, state.step3_complete),
     ]
     completed = sum(int(complete) for _, __, complete in steps)
-    st.progress(completed / len(steps), text="進行状況")
+    st.progress(completed / len(steps))
     cols = st.columns(len(steps))
     for col, (label, unlocked, complete) in zip(cols, steps):
         status = "✅" if complete else ("🟢" if unlocked else "🔒")
