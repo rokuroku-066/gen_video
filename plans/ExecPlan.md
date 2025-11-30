@@ -57,7 +57,9 @@ The two core goals are:
   - [x] `ffmpeg_utils.py`
   - [x] `run_pipeline.py`
 - [x] Basic Streamlit UI (`app.py`) implemented.
-- [ ] End‑to‑end happy‑path tested (single run with a simple theme).
+- [x] Keyframe review + selective regeneration flow exposed in Streamlit (see ExecPlan_image_review).
+- [x] Prompt template tightened to force visible per-frame changes (see ExecPlan_prompt_variation).
+- [ ] End-to-end happy-path tested (single run with a simple theme).
 - [x] Minimal tests added (`tests/`).
 - [ ] This ExecPlan updated with final Outcomes & Retrospective.
 
@@ -77,17 +79,19 @@ The two core goals are:
 - [x] Default aspect ratio set to `"16:9"` for images and videos.
 - [x] Per‑segment video duration set to 6 seconds.
 - [x] Outputs stored under `outputs/run_<timestamp>/` with `frames/`, `segments/`, and `final.mp4`.
-- [x] `get_genai_client()` raises when `ENABLE_REAL_GENAI` is unset to prevent accidental real API usage.
+- [x] `get_genai_client()` returns a fake client when `USE_FAKE_GENAI=1`; it only creates a real client when `ENABLE_REAL_GENAI=1`, otherwise it raises to prevent accidental network usage.
 
 
 ## Outcomes & Retrospective
 
-(Fill this in after implementing the plan.)
+Current state (2025-11-30):
 
-- What works end‑to‑end?
-- How long did it actually take?
-- Any design choices that should be revisited?
-- Any future work that should get its own ExecPlan?
+- The full pipeline modules and staged Streamlit UI exist and work with injected clients; offline-safe unit tests pass.
+- Real API runs have not been exercised yet; manual validation is still pending until a human enables `ENABLE_REAL_GENAI=1`.
+- Prompt variation and frame regeneration improvements landed, improving visible motion while keeping style anchored.
+- Remaining gaps:
+  - Need an **offline demo/fake client mode** so the UI can run without real APIs (new ExecPlan to follow).
+  - Desire smoother inter-segment transitions (crossfade) and optional audio track; consider future plans.
 
 
 ## Context and Orientation

@@ -29,8 +29,9 @@ Enable a two-stage creation flow: after Gemini 2.5 Flash Image generates keyfram
 
 ## Outcomes & Retrospective
 
-- Staged pipeline helpers now support separate keyframe review and final video assembly, and the Streamlit UI exposes the new flow with selective regeneration.
-- Offline pytest suite passes, covering prompt parsing and regeneration anchoring logic.
+- Staged pipeline helpers now support separate keyframe review and final video assembly, and the Streamlit UI exposes the new flow with selective regeneration and a simple three-step indicator.
+- Regeneration chains reference bytes from the latest prior frame (or the uploaded reference) to keep style anchored while allowing targeted fixes.
+- Offline pytest suite passes, covering prompt parsing and regeneration anchoring logic; integration with real APIs still requires a human to set `ENABLE_REAL_GENAI=1`.
 
 ## Context and Orientation
 

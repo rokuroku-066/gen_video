@@ -8,7 +8,7 @@ try:
 except ImportError:  # pragma: no cover - handled at call time
     types = None
 
-from .config import PipelineConfig, get_default_config, get_genai_client
+from .config import PipelineConfig, get_default_config, get_genai_client, use_fake_genai
 
 
 def _guess_mime_type(path: Path) -> str:
@@ -19,6 +19,8 @@ def _guess_mime_type(path: Path) -> str:
 
 
 def _require_types():
+    if use_fake_genai():
+        return
     if types is None:
         raise ImportError(
             "google-genai is required for image generation. Install dependencies from requirements.txt."
@@ -75,12 +77,17 @@ def _generate_image_bytes(
     _require_types()
     contents = []
     if ref_bytes:
-        contents.append(types.Part.from_bytes(data=ref_bytes, mime_type="image/png"))
+        if use_fake_genai():
+            contents.append(ref_bytes)
+        else:
+            contents.append(types.Part.from_bytes(data=ref_bytes, mime_type="image/png"))
     contents.append(prompt_text)
     response = client.models.generate_content(
         model=cfg.image_model,
         contents=contents,
-        config=types.GenerateContentConfig(
+        config=None
+        if use_fake_genai()
+        else types.GenerateContentConfig(
             response_modalities=["IMAGE"],
             image_config=types.ImageConfig(aspect_ratio=cfg.aspect_ratio),
         ),

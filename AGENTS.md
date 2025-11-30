@@ -75,6 +75,7 @@ Environment variables:
 - For Vertex AI: optionally set `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, and `GOOGLE_CLOUD_LOCATION`.
 - For **real API usage gating in this repository**:
   - `ENABLE_REAL_GENAI=1` when a human explicitly wants to run end‑to‑end with the real Gemini / Veo APIs.
+  - `USE_FAKE_GENAI=1` to force the built-in offline fake client (no network, deterministic placeholder media). This is the preferred default for demos and automated tests.
   - When `ENABLE_REAL_GENAI` is unset or not `"1"`, **real network calls must not be performed**. Either:
     - `get_genai_client()` must raise an error, or
     - it must return a fake client that does not hit the network.

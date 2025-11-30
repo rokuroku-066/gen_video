@@ -10,7 +10,7 @@ try:
 except ImportError:  # pragma: no cover - handled at call time
     types = None
 
-from .config import PipelineConfig, get_default_config, get_genai_client
+from .config import PipelineConfig, get_default_config, get_genai_client, use_fake_genai
 
 
 def _letters_sequence(count: int) -> list[str]:
@@ -69,6 +69,8 @@ def _extract_json(text: str) -> Dict[str, Any]:
 
 
 def _require_types():
+    if use_fake_genai():
+        return
     if types is None:
         raise ImportError(
             "google-genai is required for prompt generation with reference images. "
@@ -94,8 +96,11 @@ def generate_frame_prompts(
     instruction = _build_prompt(theme, num_frames, motion_hint, has_reference=ref_image_bytes is not None)
     contents: list[Any] = []
     if ref_image_bytes:
-        _require_types()
-        contents.append(types.Part.from_bytes(data=ref_image_bytes, mime_type="image/png"))
+        if not use_fake_genai():
+            _require_types()
+            contents.append(types.Part.from_bytes(data=ref_image_bytes, mime_type="image/png"))
+        else:
+            contents.append(ref_image_bytes)
     contents.append(instruction)
 
     response = genai_client.models.generate_content(

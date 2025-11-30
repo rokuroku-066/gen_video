@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from .fake_genai import FakeGenaiClient
 
 @dataclass
 class PipelineConfig:
@@ -26,18 +27,39 @@ def is_real_api_enabled() -> bool:
     return os.getenv("ENABLE_REAL_GENAI") == "1"
 
 
+def use_fake_genai() -> bool:
+    return os.getenv("USE_FAKE_GENAI") == "1"
+
+
+def describe_api_mode() -> str:
+    if is_real_api_enabled():
+        return "real"
+    if use_fake_genai():
+        return "fake"
+    return "disabled"
+
+
 def get_genai_client():
-    if not is_real_api_enabled():
-        raise RuntimeError(
-            "Real Gemini/Veo usage is disabled. Set ENABLE_REAL_GENAI=1 to allow network calls."
-        )
-    try:
-        from google import genai  # type: ignore
-    except ImportError as exc:
-        raise ImportError(
-            "google-genai is required to create a real client. Install dependencies from requirements.txt."
-        ) from exc
-    return genai.Client()
+    """
+    Return a google-genai client when ENABLE_REAL_GENAI=1, otherwise a FakeGenaiClient
+    when USE_FAKE_GENAI=1. Raise when neither flag is set to avoid accidental real usage.
+    """
+    if is_real_api_enabled():
+        try:
+            from google import genai  # type: ignore
+        except ImportError as exc:
+            raise ImportError(
+                "google-genai is required to create a real client. Install dependencies from requirements.txt."
+            ) from exc
+        return genai.Client()
+
+    if use_fake_genai():
+        return FakeGenaiClient()
+
+    raise RuntimeError(
+        "Real Gemini/Veo usage is disabled. Set ENABLE_REAL_GENAI=1 for real APIs "
+        "or USE_FAKE_GENAI=1 for offline demo mode."
+    )
 
 
 def make_run_directory(config: Optional[PipelineConfig] = None, run_name: Optional[str] = None) -> Path:

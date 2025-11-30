@@ -224,7 +224,8 @@ Recommended (but not mandatory) file structure for this repo:
 * For controlling **real API usage in this repository**:
 
   * Use `ENABLE_REAL_GENAI=1` to explicitly allow real network calls.
-  * Leave it unset (default) to keep the system in "offline / no‑real‑API" mode, which is what automated tests should assume.
+  * Use `USE_FAKE_GENAI=1` to force the built‑in offline fake client (no network; deterministic placeholder PNG/MP4) for demos and tests.
+  * Leave both unset to keep the system in a "disabled" mode where `get_genai_client()` raises to prevent accidental network usage.
 
 ExecPlans should decide which mode to use and state it clearly in `Context and Orientation` and `Interfaces and Dependencies`. They must also spell out:
 

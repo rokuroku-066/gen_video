@@ -9,7 +9,7 @@ try:
 except ImportError:  # pragma: no cover - handled at call time
     types = None
 
-from .config import PipelineConfig, get_default_config, get_genai_client
+from .config import PipelineConfig, get_default_config, get_genai_client, use_fake_genai
 
 
 def _guess_mime_type(path: Path) -> str:
@@ -20,11 +20,10 @@ def _guess_mime_type(path: Path) -> str:
 
 
 def _make_image_input(path: Path) -> types.Image:
+    if use_fake_genai():
+        return path
     _require_types()
-    return types.Image.from_file(
-        location=str(path),
-        mime_type=_guess_mime_type(path),
-    )
+    return types.Image.from_file(location=str(path), mime_type=_guess_mime_type(path))
 
 
 def _extract_video_bytes(download) -> bytes:
@@ -42,6 +41,8 @@ def _extract_video_bytes(download) -> bytes:
 
 
 def _require_types():
+    if use_fake_genai():
+        return
     if types is None:
         raise ImportError(
             "google-genai is required for Veo video generation. Install dependencies from requirements.txt."
@@ -88,23 +89,34 @@ def generate_segment_for_pair(
         f"Motion description: {motion_description or 'natural, subtle motion continuing the scene.'}"
     )
 
-    _require_types()
+    duration_seconds = cfg.segment_duration_seconds
+    if use_fake_genai():
+        operation = genai_client.models.generate_videos(
+            model=cfg.video_model,
+            prompt=prompt_text,
+            image=_make_image_input(frame1_path),
+            config={
+                "aspect_ratio": cfg.aspect_ratio,
+                "duration_seconds": duration_seconds,
+                "last_frame": _make_image_input(frame2_path),
+            },
+        )
+    else:
+        _require_types()
+        # Veo interpolation mode (image + last_frame) only supports 8-second clips.
+        if duration_seconds != 8:
+            duration_seconds = 8
 
-    # Veo interpolation mode (image + last_frame) only supports 8-second clips.
-    duration_seconds = 8
-    if cfg.segment_duration_seconds != 8:
-        duration_seconds = 8
-
-    operation = genai_client.models.generate_videos(
-        model=cfg.video_model,
-        prompt=prompt_text,
-        image=_make_image_input(frame1_path),
-        config=types.GenerateVideosConfig(
-            aspect_ratio=cfg.aspect_ratio,
-            duration_seconds=duration_seconds,
-            last_frame=_make_image_input(frame2_path),
-        ),
-    )
+        operation = genai_client.models.generate_videos(
+            model=cfg.video_model,
+            prompt=prompt_text,
+            image=_make_image_input(frame1_path),
+            config=types.GenerateVideosConfig(
+                aspect_ratio=cfg.aspect_ratio,
+                duration_seconds=duration_seconds,
+                last_frame=_make_image_input(frame2_path),
+            ),
+        )
 
     while not getattr(operation, "done", False):
         time.sleep(5)
