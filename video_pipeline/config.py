@@ -13,7 +13,8 @@ class PipelineConfig:
     image_model: str = "gemini-2.5-flash-image"
     video_model: str = "veo-3.1-generate-preview"
     aspect_ratio: str = "16:9"
-    segment_duration_seconds: int = 6
+    # Veo interpolation (first + last frame) requires 8-second segments.
+    segment_duration_seconds: int = 8
     outputs_root: Path = Path("outputs")
 
 

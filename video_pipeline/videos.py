@@ -12,9 +12,19 @@ except ImportError:  # pragma: no cover - handled at call time
 from .config import PipelineConfig, get_default_config, get_genai_client
 
 
-def _make_image_part(path: Path) -> types.Part:
+def _guess_mime_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        return "image/jpeg"
+    return "image/png"
+
+
+def _make_image_input(path: Path) -> types.Image:
     _require_types()
-    return types.Part.from_bytes(data=path.read_bytes(), mime_type="image/png")
+    return types.Image.from_file(
+        location=str(path),
+        mime_type=_guess_mime_type(path),
+    )
 
 
 def _extract_video_bytes(download) -> bytes:
@@ -38,6 +48,26 @@ def _require_types():
         )
 
 
+def _extract_generated_videos(operation, response):
+    """
+    Extract generated videos from a completed operation, handling both camelCase and snake_case.
+    """
+    if response is None:
+        return None
+    # Attribute-style access (protobuf / SDK objects)
+    for attr in ("generated_videos", "generatedVideos", "videos"):
+        value = getattr(response, attr, None)
+        if value:
+            return value
+    # Dict-style access (rest/raw responses)
+    if isinstance(response, dict):
+        for key in ("generated_videos", "generatedVideos", "videos"):
+            value = response.get(key)
+            if value:
+                return value
+    return None
+
+
 def generate_segment_for_pair(
     frame1_path: Path,
     frame2_path: Path,
@@ -59,14 +89,20 @@ def generate_segment_for_pair(
     )
 
     _require_types()
+
+    # Veo interpolation mode (image + last_frame) only supports 8-second clips.
+    duration_seconds = 8
+    if cfg.segment_duration_seconds != 8:
+        duration_seconds = 8
+
     operation = genai_client.models.generate_videos(
         model=cfg.video_model,
         prompt=prompt_text,
-        image=_make_image_part(frame1_path),
+        image=_make_image_input(frame1_path),
         config=types.GenerateVideosConfig(
             aspect_ratio=cfg.aspect_ratio,
-            duration_seconds=cfg.segment_duration_seconds,
-            last_frame=_make_image_part(frame2_path),
+            duration_seconds=duration_seconds,
+            last_frame=_make_image_input(frame2_path),
         ),
     )
 
@@ -74,11 +110,30 @@ def generate_segment_for_pair(
         time.sleep(5)
         operation = genai_client.operations.get(operation)
 
-    response = getattr(operation, "response", None)
-    if not response or not getattr(response, "generated_videos", None):
-        raise RuntimeError("Video generation operation did not return generated_videos")
+    # Surface explicit backend error if present.
+    op_error = getattr(operation, "error", None)
+    if op_error is None and isinstance(operation, dict):
+        op_error = operation.get("error")
+    if op_error:
+        raise RuntimeError(f"Veo operation failed: {op_error}")
 
-    video_obj = response.generated_videos[0]
+    response = getattr(operation, "response", None) or getattr(operation, "result", None)
+    if response is None and isinstance(operation, dict):
+        response = operation.get("response") or operation.get("result")
+
+    generated_videos = _extract_generated_videos(operation, response)
+    if not generated_videos:
+        debug_keys = []
+        if isinstance(response, dict):
+            debug_keys = list(response.keys())
+        else:
+            debug_keys = [attr for attr in dir(response) if not attr.startswith("_")] if response else []
+        raise RuntimeError(
+            "Video generation operation completed but did not return generated_videos "
+            f"(available fields: {debug_keys})"
+        )
+
+    video_obj = generated_videos[0]
     download = genai_client.files.download(file=video_obj.video)
     video_bytes = _extract_video_bytes(download)
     output_path.write_bytes(video_bytes)

@@ -38,9 +38,17 @@ state.setdefault("step3_complete", False)
 
 
 def _reset_generation_state():
-    for key in ["run_dir", "prompts_data", "frame_paths", "final_video_path", "selected_frames", "ref_path"]:
-        state.pop(key, None)
-    state.update(step1_complete=False, step2_complete=False, step3_complete=False)
+    state.update(
+        run_dir=None,
+        prompts_data=None,
+        frame_paths=None,
+        final_video_path=None,
+        selected_frames=[],
+        ref_path=None,
+        step1_complete=False,
+        step2_complete=False,
+        step3_complete=False,
+    )
 
 
 def _render_step_indicator():

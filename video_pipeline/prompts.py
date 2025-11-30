@@ -25,30 +25,31 @@ def _letters_sequence(count: int) -> list[str]:
 def _build_prompt(theme: str, num_frames: int, motion_hint: Optional[str], has_reference: bool) -> str:
     frame_labels = ", ".join(_letters_sequence(num_frames))
     reference_text = (
-        "You are provided with a reference image that anchors the style, character design, and camera."
-        " Extract its visual style and keep it consistent across every frame."
+        "You are provided with a reference image that anchors the look for frame A."
+        " Extract its visual style for frame A, then only describe deltas afterward."
     )
     prompt = f"""
 You are a storyboard generator for a multi-segment animation.
-Goal: produce a sequence of frame prompts that keep the SAME character, art style, camera angle, and world across frames, with only small motion changes between frames.
+Goal: produce a sequence of frame prompts. Frame A defines the baseline; frames B+ should only describe how the character and background evolve from the previous frame (pose/action, camera move, environment changes).
 
 Theme: {theme}
 Frames to produce: {frame_labels}
-{"Reference: " + reference_text if has_reference else "No reference image is provided; establish a consistent style yourself and keep it stable."}
-Motion direction: {motion_hint or "Use subtle, progressive motion so each frame flows into the next without big jumps."}
+{"Reference: " + reference_text if has_reference else "No reference image is provided; establish the baseline in frame A."}
+Motion direction: {motion_hint or "Plan a progressive motion arc spread across the whole sequence, not just the last frame."}
 
 Rules:
-- Maintain visual consistency: same character identity, clothing, body proportions, lighting mood, color palette, camera lens, and environment.
-- Frame A sets the baseline. Each subsequent frame should be a gentle evolution of the previous frame.
-- Avoid drastic scene or costume changes; only small pose/motion adjustments.
+- Each frame represents an 8-second interval in the movie.
+- Frame A: full description (shot, composition, subject, environment) to establish the baseline.
+- Each subsequent frame: describe ONLY the visible change from the previous frame (pose/action, camera move like pan/tilt/dolly/orbit/closer/wider, environment evolution like fog shifts, lighting changes, parallax). Avoid restating the baseline.
+- Changes must be obvious at a glance; avoid near-duplicates.
+- Use "change_from_previous" to capture the specific visible change in 5-12 words; the frame prompt should focus on that delta, not repeat the whole scene.
 - Return ONLY JSON. Do not include markdown code fences.
 
 Return JSON of the form:
 {{
-  "global_style": "<summary of the style and character identity>",
   "frames": [
-    {{"id": "A", "prompt": "<detailed image prompt for frame A>", "change_from_previous": null}},
-    {{"id": "B", "prompt": "<same style, small motion from A>", "change_from_previous": "<short motion description>"}},
+    {{"id": "A", "prompt": "<baseline description>", "change_from_previous": null}},
+    {{"id": "B", "prompt": "<only the delta from frame A>", "change_from_previous": "<short motion/environment/camera change>"}},
     ...
   ]
 }}
@@ -131,14 +132,20 @@ def generate_frame_prompts(
             frames[idx].setdefault("id", expected_id)
             if idx == 0:
                 frames[idx].setdefault("change_from_previous", None)
+            else:
+                frames[idx].setdefault(
+                    "change_from_previous",
+                    "visible pose/camera/environment change from the previous frame",
+                )
         else:
             frames.append(
                 {
                     "id": expected_id,
                     "prompt": f"{theme} frame {expected_id} in consistent style.",
-                    "change_from_previous": None if idx == 0 else "continue smoothly",
+                    "change_from_previous": None
+                    if idx == 0
+                    else "visible pose/camera/environment change from the previous frame",
                 }
             )
     prompts_data["frames"] = frames[:num_frames]
-    prompts_data.setdefault("global_style", "Consistent character and world across all frames.")
     return prompts_data

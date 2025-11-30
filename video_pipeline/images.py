@@ -43,6 +43,28 @@ def _extract_image_bytes(response) -> bytes:
     raise ValueError("Image generation response did not contain inline_data")
 
 
+def _compose_image_prompt(frame: dict) -> str:
+    """Combine per-frame prompt and change description, focusing on deltas after frame A."""
+    frame_id = frame.get("id") or "?"
+    base_prompt = frame.get("prompt") or ""
+    change = frame.get("change_from_previous") or "incremental change to pose/camera/environment from previous frame."
+
+    if (frame_id or "").upper() == "A":
+        return (
+            f"Frame {frame_id} (baseline): {base_prompt}\n"
+            "Establish the full scene, subject, outfit, lighting, and environment for subsequent frames."
+        )
+
+    return (
+        f"Frame {frame_id} (delta from prior frame):\n"
+        f"- Apply the previous frame as the visual baseline.\n"
+        f"- Visible change: {change}.\n"
+        f"- Additional nuance: {base_prompt}.\n"
+        "- Force a noticeable shift in pose/action or camera framing (pan/tilt/dolly/orbit/closer/wider) and evolve the environment (fog density, bioluminescent growth, tree parallax); avoid near-identical framing.\n"
+        "Do not reset the scene. Keep subject, outfit, and world consistent; only apply the stated pose/camera/environment change."
+    )
+
+
 def _generate_image_bytes(
     prompt_text: str,
     ref_bytes: Optional[bytes],
@@ -92,7 +114,7 @@ def generate_keyframe_images(
     frames = prompts_data.get("frames", [])
     for frame in frames:
         frame_id = frame.get("id") or "X"
-        prompt_text = frame.get("prompt") or ""
+        prompt_text = _compose_image_prompt(frame)
         image_bytes = _generate_image_bytes(
             prompt_text,
             prev_image_bytes,
@@ -142,7 +164,7 @@ def regenerate_keyframe_images(
             raise FileNotFoundError(f"Expected existing frame image at {existing_path}")
 
         if frame_id in target_ids:
-            prompt_text = frame.get("prompt") or ""
+            prompt_text = _compose_image_prompt(frame)
             image_bytes = _generate_image_bytes(
                 prompt_text,
                 prev_image_bytes,

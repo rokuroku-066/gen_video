@@ -10,14 +10,15 @@ def concat_clips(clip_paths: Iterable[Union[str, Path]], output_path: Path) -> s
     """
     Concatenate MP4 clips using ffmpeg concat demuxer.
     """
-    clip_list = [Path(p) for p in clip_paths]
+    # Normalize to absolute paths so Streamlit / temp working directories don't break concat.
+    clip_list = [Path(p).resolve() for p in clip_paths]
     if not clip_list:
         raise ValueError("No clip paths provided for concatenation")
     for clip in clip_list:
         if not clip.exists():
             raise FileNotFoundError(f"Clip not found: {clip}")
 
-    output_path = Path(output_path)
+    output_path = Path(output_path).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as list_file:

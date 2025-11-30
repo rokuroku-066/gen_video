@@ -1,8 +1,6 @@
 from pathlib import Path
 from typing import Optional
 
-import pytest
-
 from video_pipeline import images
 
 
@@ -21,9 +19,9 @@ def test_regenerate_keyframe_images_overwrites_selected(monkeypatch, tmp_path):
 
     prompts_data = {
         "frames": [
-            {"id": "A", "prompt": "alpha"},
-            {"id": "B", "prompt": "beta"},
-            {"id": "C", "prompt": "gamma"},
+            {"id": "A", "prompt": "alpha", "change_from_previous": None},
+            {"id": "B", "prompt": "beta", "change_from_previous": "lifts hand and camera pans right"},
+            {"id": "C", "prompt": "gamma", "change_from_previous": "leans closer to camera"},
         ]
     }
 
@@ -44,7 +42,12 @@ def test_regenerate_keyframe_images_overwrites_selected(monkeypatch, tmp_path):
         client=object(),
     )
 
-    assert Path(updated["B"]).read_bytes().startswith(b"new-beta")
-    assert calls[0] == ("beta", b"A0")  # prior frame bytes anchor regeneration
+    prompt_text, ref_bytes = calls[0]
+    assert ref_bytes == b"A0"  # prior frame bytes anchor regeneration
+    assert "Frame B (delta from prior frame)" in prompt_text
+    assert "Additional nuance: beta" in prompt_text
+    assert "Visible change: lifts hand and camera pans right" in prompt_text
+    assert "Force a noticeable shift" in prompt_text
+    assert Path(updated["B"]).read_bytes().startswith(b"new-")  # regenerated
     assert Path(updated["C"]).read_bytes() == b"C0"  # untouched frame remains
 
