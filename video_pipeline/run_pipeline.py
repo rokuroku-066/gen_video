@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional, Union
 
+from . import ffmpeg_utils
 from .config import PipelineConfig, get_default_config, make_run_directory
-from .ffmpeg_utils import concat_clips
 from .images import generate_keyframe_images
 from .prompts import generate_frame_prompts
 from .videos import generate_all_segments
@@ -67,7 +67,7 @@ def build_video_from_frames(
     )
 
     final_video_path = Path(run_dir) / "final.mp4"
-    concat_clips(clip_paths, final_video_path)
+    ffmpeg_utils.concat_clips(clip_paths, final_video_path)
     return str(final_video_path)
 
 

@@ -29,3 +29,22 @@ def test_concat_clips_invokes_ffmpeg_and_writes_output(monkeypatch, tmp_path):
 
     assert Path(result).exists()
     assert Path(result).read_bytes() == b"fake video data"
+
+
+def test_extract_last_frame_invokes_ffmpeg(monkeypatch, tmp_path):
+    video_path = tmp_path / "clip.mp4"
+    image_path = tmp_path / "frames" / "last.png"
+    video_path.write_bytes(b"video")
+
+    def fake_run(cmd, capture_output, text):
+        # Ensure ffmpeg writes to the requested path.
+        Path(cmd[-1]).write_bytes(b"frame")
+        return _FakeCompletedProcess(video_path)
+
+    monkeypatch.setattr(ffmpeg_utils.subprocess, "run", fake_run)
+
+    result = ffmpeg_utils.extract_last_frame(video_path, image_path)
+
+    assert result == image_path.resolve()
+    assert image_path.exists()
+    assert image_path.read_bytes() == b"frame"
