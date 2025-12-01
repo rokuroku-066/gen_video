@@ -69,3 +69,48 @@ def test_extract_last_frame_invokes_ffmpeg(monkeypatch, tmp_path):
     assert result == image_path.resolve()
     assert image_path.exists()
     assert image_path.read_bytes() == b"frame"
+
+
+def test_concat_clips_writes_utf8_file_list(monkeypatch, tmp_path):
+    """
+    Ensure concat_clips writes the concat list using UTF-8 so non-ASCII paths work on Windows.
+    """
+    clip1 = tmp_path / "clip_あ.mp4"
+    clip2 = tmp_path / "clip2.mp4"
+    clip1.write_bytes(b"clip1")
+    clip2.write_bytes(b"clip2")
+
+    list_file_path = tmp_path / "list.txt"
+
+    def fake_namedtempfile(*, mode, delete, suffix, encoding):
+        assert encoding == "utf-8"
+
+        class _Dummy:
+            name = str(list_file_path)
+
+            def write(self, data: str):
+                # Write using the requested encoding to mimic tempfile's behavior.
+                with open(list_file_path, "a", encoding=encoding) as f:
+                    f.write(data)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                pass
+
+        return _Dummy()
+
+    def fake_run(cmd, capture_output, text):
+        # Ensure the list file contains the multibyte character for 'あ'.
+        data = list_file_path.read_bytes()
+        assert b"\xe3\x81\x82" in data  # 'あ' in UTF-8
+        return _FakeCompletedProcess(Path(cmd[-1]))
+
+    monkeypatch.setattr(ffmpeg_utils.tempfile, "NamedTemporaryFile", fake_namedtempfile)
+    monkeypatch.setattr(ffmpeg_utils.subprocess, "run", fake_run)
+
+    output_path = tmp_path / "out.mp4"
+    result = ffmpeg_utils.concat_clips([clip1, clip2], output_path)
+
+    assert Path(result).exists()

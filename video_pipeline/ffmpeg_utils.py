@@ -74,7 +74,11 @@ def concat_clips(clip_paths: Iterable[Union[str, Path]], output_path: Path) -> s
     output_path = Path(output_path).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as list_file:
+    # Use UTF-8 so paths with non-ASCII characters (e.g., Japanese OneDrive folders)
+    # are written in a form ffmpeg understands on Windows.
+    with tempfile.NamedTemporaryFile(
+        mode="w", delete=False, suffix=".txt", encoding="utf-8"
+    ) as list_file:
         for clip in clip_list:
             list_file.write(_format_concat_line(clip))
         list_file_path = Path(list_file.name)
