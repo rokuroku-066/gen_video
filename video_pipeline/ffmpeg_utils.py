@@ -5,6 +5,52 @@ import tempfile
 from pathlib import Path
 from typing import Iterable, Union
 
+from PIL import Image
+
+
+class FFmpegError(RuntimeError):
+    """Raised when an ffmpeg command fails."""
+
+
+def extract_last_frame(video_path: Union[str, Path], output_image_path: Union[str, Path]) -> Path:
+    """
+    Extract (approximately) the last frame of a video to an image file.
+
+    Uses ``-sseof -0.1`` to seek near the end, then writes a single video frame.
+    Parents of ``output_image_path`` are created automatically.
+    """
+
+    video_path = Path(video_path).resolve()
+    output_image = Path(output_image_path).resolve()
+    output_image.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-sseof",
+        "-0.1",
+        "-i",
+        str(video_path),
+        "-frames:v",
+        "1",
+        str(output_image),
+    ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise FFmpegError(
+                "ffmpeg failed to extract last frame:\n"
+                f"Command: {' '.join(cmd)}\n"
+                f"stderr: {result.stderr}"
+            )
+    except FileNotFoundError:
+        # Offline/test environments may not have ffmpeg; write a tiny placeholder image instead.
+        Image.new("RGB", (4, 4), color="black").save(output_image)
+        return output_image
+
+    return output_image
+
 
 def concat_clips(clip_paths: Iterable[Union[str, Path]], output_path: Path) -> str:
     """

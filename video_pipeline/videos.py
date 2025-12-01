@@ -10,6 +10,7 @@ except ImportError:  # pragma: no cover - handled at call time
     types = None
 
 from .config import PipelineConfig, get_default_config, get_genai_client, use_fake_genai
+from .ffmpeg_utils import extract_last_frame
 
 
 def _guess_mime_type(path: Path) -> str:
@@ -166,18 +167,23 @@ def generate_all_segments(
     segments_dir.mkdir(parents=True, exist_ok=True)
 
     frames = prompts_data.get("frames", [])
+    if len(frames) < 2:
+        raise ValueError("At least 2 frames are required to generate segments.")
+
     clip_paths: List[str] = []
+    first_frame = frames[0]
+    first_id = first_frame.get("id") or "F0"
+    current_start_image = Path(frame_image_paths[first_id])
+
     for idx in range(len(frames) - 1):
-        first = frames[idx]
         second = frames[idx + 1]
-        first_id = first.get("id") or f"F{idx}"
         second_id = second.get("id") or f"F{idx+1}"
-        first_path = Path(frame_image_paths[first_id])
         second_path = Path(frame_image_paths[second_id])
         motion_description = second.get("change_from_previous") or "smooth continuation"
-        segment_path = segments_dir / f"segment_{first_id}_{second_id}.mp4"
+        segment_path = segments_dir / f"segment_{idx:03d}_{first_id}_{second_id}.mp4"
+
         generated = generate_segment_for_pair(
-            first_path,
+            current_start_image,
             second_path,
             motion_description,
             segment_path,
@@ -185,4 +191,8 @@ def generate_all_segments(
             config=cfg,
         )
         clip_paths.append(generated)
+
+        last_frame_image = segments_dir / f"segment_{idx:03d}_{first_id}_{second_id}_last.png"
+        current_start_image = extract_last_frame(Path(generated), last_frame_image)
+        first_id = second_id
     return clip_paths
