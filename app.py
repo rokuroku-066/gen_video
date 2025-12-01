@@ -47,10 +47,15 @@ state.setdefault("ref_path", None)
 state.setdefault("step1_complete", False)
 state.setdefault("step2_complete", False)
 state.setdefault("step3_complete", False)
+state.setdefault("prompt_inputs", {})
 state.setdefault("use_fake_mode", use_fake_genai())
 
 
 def _reset_generation_state() -> None:
+    for key in list(state.keys()):
+        if str(key).startswith("prompt_input_"):
+            del state[key]
+
     state.update(
         run_dir=None,
         prompts_data=None,
@@ -61,6 +66,7 @@ def _reset_generation_state() -> None:
         step1_complete=False,
         step2_complete=False,
         step3_complete=False,
+        prompt_inputs={},
     )
 
 
@@ -164,14 +170,28 @@ with tabs[1]:
     if state.frame_paths and state.prompts_data:
         st.subheader("生成されたキーフレーム")
         columns = st.columns(2)
-        for idx, frame in enumerate(state.prompts_data.get("frames", [])):
+
+        frames = state.prompts_data.get("frames", [])
+        for frame in frames:
             frame_id = frame.get("id") or "?"
             prompt_text = frame.get("prompt") or ""
+            state.prompt_inputs.setdefault(frame_id, prompt_text)
+
+        for idx, frame in enumerate(frames):
+            frame_id = frame.get("id") or "?"
+            prompt_text = state.prompt_inputs.get(frame_id, frame.get("prompt") or "")
             with columns[idx % 2]:
                 st.image(state.frame_paths.get(frame_id), caption=f"Frame {frame_id}")
-                st.caption(prompt_text)
+                edited_prompt = st.text_area(
+                    "再生成用プロンプトを編集",
+                    key=f"prompt_input_{frame_id}",
+                    value=prompt_text,
+                    height=140,
+                )
+                state.prompt_inputs[frame_id] = edited_prompt
+                frame["prompt"] = edited_prompt
 
-        frame_ids = [frame.get("id") or "?" for frame in state.prompts_data.get("frames", [])]
+        frame_ids = [frame.get("id") or "?" for frame in frames]
         selection = st.multiselect(
             "再生成したいフレームを選択", frame_ids, default=state.get("selected_frames", [])
         )
