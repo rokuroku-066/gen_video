@@ -5,7 +5,7 @@ from typing import Optional, Union
 
 from . import ffmpeg_utils
 from .config import PipelineConfig, get_default_config, make_run_directory
-from .images import generate_keyframe_images
+from .images import generate_storyboard_images
 from .prompts import generate_frame_prompts
 from .videos import generate_all_segments
 
@@ -21,7 +21,7 @@ def generate_initial_frames(
     config: Optional[PipelineConfig] = None,
 ):
     """
-    Generate prompts and keyframe images for a run directory.
+    Generate prompts and storyboard images for a run directory.
 
     Returns a tuple of (prompts_data, frame_image_paths).
     """
@@ -37,7 +37,7 @@ def generate_initial_frames(
         config=cfg,
     )
 
-    frame_image_paths = generate_keyframe_images(
+    frame_image_paths = generate_storyboard_images(
         prompts_data,
         run_dir,
         ref_image_path=ref_image_path,
@@ -81,7 +81,7 @@ def run_pipeline(
     config: Optional[PipelineConfig] = None,
 ) -> str:
     """
-    Full pipeline: prompts -> keyframe images -> Veo segments -> concatenated MP4.
+    Full pipeline: prompts -> storyboard images -> Veo segments -> concatenated MP4.
     Returns the path to the final video file.
     """
     cfg = config or get_default_config()

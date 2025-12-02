@@ -2,10 +2,10 @@
 
 This repository contains a Python project that builds a **video generation tool** using:
 - Gemini text models for prompt generation,
-- Gemini 2.5 Flash Image ("Nano Banana") for keyframe images,
+- Gemini 2.5 Flash Image ("Nano Banana") for storyboard images,
 - Veo 3.1 for short video clips,
 - `ffmpeg` for concatenating clips,
-- Streamlit for a guided, three-step Web UI (prompt entry → keyframe review/regeneration → video build).
+- Streamlit for a guided, three-step Web UI (prompt entry → storyboard review/regeneration → video build).
 
 The primary goals of the system are:
 
@@ -48,7 +48,7 @@ Short tasks such as "fix this small bug" or "rename a function" may be done with
 - Keep side‑effects local; pipeline functions should:
   - Accept explicit parameters,
   - Return values or paths instead of relying on global state.
-- Use clear, descriptive names (e.g. `generate_frame_prompts`, `generate_keyframes`, `generate_segment_video`, `concat_clips`).
+- Use clear, descriptive names (e.g. `generate_frame_prompts`, `generate_storyboards`, `generate_segment_video`, `concat_clips`).
 - For configuration, use a dedicated module (for example `video_pipeline/config.py`) or dataclasses instead of scattering constants.
 
 
@@ -235,7 +235,7 @@ from video_pipeline.run_pipeline import run_pipeline
 
   * `st.title("Gemini + Veo Animation Builder")` (or similar)
   * A text area for the theme.
-  * A number input for keyframe count.
+  * A number input for storyboard count.
   * A file uploader for an optional reference image.
   * A button labeled "Generate video".
 

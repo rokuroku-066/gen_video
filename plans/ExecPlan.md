@@ -3,7 +3,7 @@
 This ExecPlan is a living design document for this repository.  
 It explains how to implement an end‑to‑end system that:
 
-1. Maintains **visual consistency** across a sequence of keyframe images and video segments.
+1. Maintains **visual consistency** across a sequence of storyboard images and video segments.
 2. Produces a **final video longer than Veo’s per‑clip duration limit** by composing multiple Veo segments into one file.
 
 Follow the conventions described in `PLANS.md` and `AGENTS.md` when editing this document.  
@@ -18,12 +18,12 @@ From a user’s perspective:
 - In the UI, the user can:
   - Optionally upload a **reference image** (used to anchor the character / style of frame A).
   - Type a **theme / prompt** (e.g. “a glowing fairy walking on a neon rooftop at night”).
-  - Choose the **number of keyframes** (e.g. 3–6).
+  - Choose the **number of storyboards** (e.g. 3–6).
 - When the user clicks “Generate video”:
   1. The system calls a **Gemini text model** to generate:
      - A **global style description** (character, art style, camera, world),
      - A list of **per‑frame prompts** (A, B, C, …) that share the same style but differ in pose / motion.
-  2. The system calls **Gemini 2.5 Flash Image** (“Nano Banana”) to generate keyframe images for all frames:
+  2. The system calls **Gemini 2.5 Flash Image** (“Nano Banana”) to generate storyboard images for all frames:
      - Frame A optionally anchored on the user’s reference image.
      - Frame B generated with frame A as a reference image.
      - Frame C generated with frame B as a reference image.
@@ -57,7 +57,7 @@ The two core goals are:
   - [x] `ffmpeg_utils.py`
   - [x] `run_pipeline.py`
 - [x] Basic Streamlit UI (`app.py`) implemented.
-- [x] Keyframe review + selective regeneration flow exposed in Streamlit (see ExecPlan_image_review).
+- [x] Storyboard review + selective regeneration flow exposed in Streamlit (see ExecPlan_image_review).
 - [x] Prompt template tightened to force visible per-frame changes (see ExecPlan_prompt_variation).
 - [ ] End-to-end happy-path tested (single run with a simple theme).
 - [x] Minimal tests added (`tests/`).
@@ -125,7 +125,7 @@ This ExecPlan assumes the repository will be organized roughly as follows:
       - `global_style`
       - `frames` (A, B, C, …)
   - `images.py`  
-    Functions to call **Gemini 2.5 Flash Image** to generate keyframe images from prompts (and reference images).
+    Functions to call **Gemini 2.5 Flash Image** to generate storyboard images from prompts (and reference images).
   - `videos.py`  
     Functions to call Veo 3.1 to generate per‑segment videos from frame images and motion descriptions.
   - `ffmpeg_utils.py`  
@@ -205,7 +205,7 @@ High‑level steps:
 
 5. **Implement image generation (`video_pipeline/images.py`)**
    - Provide functions:
-     - `generate_keyframe_images(prompts_data, output_dir, ref_image_path=None) -> dict[str, str]`
+     - `generate_storyboard_images(prompts_data, output_dir, ref_image_path=None) -> dict[str, str]`
        - Returns a mapping `{frame_id: image_path}`.
    - Use `"gemini-2.5-flash-image"` model to generate:
      - Frame A:
@@ -238,7 +238,7 @@ High‑level steps:
    - Steps:
      - Create a new run directory (`outputs/run_<timestamp_or_uuid>/`).
      - Call `generate_frame_prompts`.
-     - Call `generate_keyframe_images`.
+     - Call `generate_storyboard_images`.
      - Call `generate_all_segments`.
      - Call `concat_clips`.
      - Return final MP4 path.
@@ -246,7 +246,7 @@ High‑level steps:
 9. **Implement Streamlit UI (`app.py`)**
    - Provide UI elements:
      - Theme text input / text area,
-     - Keyframe count input (min 2),
+     - Storyboard count input (min 2),
      - Optional file uploader for reference image,
      - Generate button.
    - On button click:
@@ -288,7 +288,7 @@ To consider this ExecPlan implemented successfully, the following manual checks 
      streamlit run app.py
      ```
 
-   - The browser opens with the app showing theme input, keyframe selector, reference image uploader, and generate button.
+   - The browser opens with the app showing theme input, storyboard selector, reference image uploader, and generate button.
 
 3. **End‑to‑end video generation**
 

@@ -102,7 +102,7 @@ def _generate_image_bytes(
     return _extract_image_bytes(response)
 
 
-def generate_keyframe_images(
+def generate_storyboard_images(
     prompts_data,
     output_dir: Path,
     ref_image_path: Optional[Union[Path, str]] = None,
@@ -111,7 +111,7 @@ def generate_keyframe_images(
     config: Optional[PipelineConfig] = None,
 ) -> Dict[str, str]:
     """
-    Generate keyframe images for each frame prompt.
+    Generate storyboard images for each frame prompt.
     Returns a mapping of frame_id -> saved image path (as string).
     """
     cfg = config or get_default_config()
@@ -144,7 +144,7 @@ def generate_keyframe_images(
     return frame_paths
 
 
-def regenerate_keyframe_images(
+def regenerate_storyboard_images(
     prompts_data,
     frame_image_paths: Dict[str, str],
     run_dir: Path,
