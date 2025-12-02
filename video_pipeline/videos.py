@@ -10,6 +10,7 @@ except ImportError:  # pragma: no cover - handled at call time
     types = None
 
 from .config import PipelineConfig, get_default_config, get_genai_client, use_fake_genai
+from .fake_genai import is_fake_client
 from .ffmpeg_utils import extract_last_frame
 
 
@@ -20,10 +21,14 @@ def _guess_mime_type(path: Path) -> str:
     return "image/png"
 
 
-def _make_image_input(path: Path) -> types.Image:
-    if use_fake_genai():
+def _is_fake_mode(client) -> bool:
+    return use_fake_genai() or is_fake_client(client)
+
+
+def _make_image_input(path: Path, *, client) -> types.Image:
+    if _is_fake_mode(client):
         return path
-    _require_types()
+    _require_types(fake_mode=False)
     return types.Image.from_file(location=str(path), mime_type=_guess_mime_type(path))
 
 
@@ -41,8 +46,8 @@ def _extract_video_bytes(download) -> bytes:
     raise ValueError("Could not extract bytes from download response")
 
 
-def _require_types():
-    if use_fake_genai():
+def _require_types(fake_mode: bool):
+    if fake_mode:
         return
     if types is None:
         raise ImportError(
@@ -84,6 +89,8 @@ def generate_segment_for_pair(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    fake_mode = _is_fake_mode(genai_client)
+
     prompt_text = (
         "Create a short, smooth video segment that starts from the first frame and moves toward the second frame. "
         "Maintain the same character, art style, camera framing, lighting, and world details across the segment. "
@@ -91,19 +98,19 @@ def generate_segment_for_pair(
     )
 
     duration_seconds = cfg.segment_duration_seconds
-    if use_fake_genai():
+    if fake_mode:
         operation = genai_client.models.generate_videos(
             model=cfg.video_model,
             prompt=prompt_text,
-            image=_make_image_input(frame1_path),
+            image=_make_image_input(frame1_path, client=genai_client),
             config={
                 "aspect_ratio": cfg.aspect_ratio,
                 "duration_seconds": duration_seconds,
-                "last_frame": _make_image_input(frame2_path),
+                "last_frame": _make_image_input(frame2_path, client=genai_client),
             },
         )
     else:
-        _require_types()
+        _require_types(fake_mode)
         # Veo interpolation mode (image + last_frame) only supports 8-second clips.
         if duration_seconds != 8:
             duration_seconds = 8
@@ -111,11 +118,11 @@ def generate_segment_for_pair(
         operation = genai_client.models.generate_videos(
             model=cfg.video_model,
             prompt=prompt_text,
-            image=_make_image_input(frame1_path),
+            image=_make_image_input(frame1_path, client=genai_client),
             config=types.GenerateVideosConfig(
                 aspect_ratio=cfg.aspect_ratio,
                 duration_seconds=duration_seconds,
-                last_frame=_make_image_input(frame2_path),
+                last_frame=_make_image_input(frame2_path, client=genai_client),
             ),
         )
 
@@ -173,12 +180,18 @@ def generate_all_segments(
     clip_paths: List[str] = []
     first_frame = frames[0]
     first_id = first_frame.get("id") or "F0"
-    current_start_image = Path(frame_image_paths[first_id])
+    try:
+        current_start_image = Path(frame_image_paths[first_id])
+    except KeyError as exc:
+        raise KeyError(f"frame_image_paths is missing image for first frame id={first_id}") from exc
 
     for idx in range(len(frames) - 1):
         second = frames[idx + 1]
         second_id = second.get("id") or f"F{idx+1}"
-        second_path = Path(frame_image_paths[second_id])
+        try:
+            second_path = Path(frame_image_paths[second_id])
+        except KeyError as exc:
+            raise KeyError(f"frame_image_paths is missing image for frame id={second_id}") from exc
         motion_description = second.get("change_from_previous") or "smooth continuation"
         segment_path = segments_dir / f"segment_{idx:03d}_{first_id}_{second_id}.mp4"
 

@@ -52,6 +52,13 @@ def extract_last_frame(video_path: Union[str, Path], output_image_path: Union[st
     return output_image
 
 
+def _format_concat_line(path: Path) -> str:
+    """Format a concat list line, escaping single quotes in paths."""
+
+    escaped = path.as_posix().replace("'", r"\'")
+    return f"file '{escaped}'\n"
+
+
 def concat_clips(clip_paths: Iterable[Union[str, Path]], output_path: Path) -> str:
     """
     Concatenate MP4 clips using ffmpeg concat demuxer.
@@ -69,7 +76,7 @@ def concat_clips(clip_paths: Iterable[Union[str, Path]], output_path: Path) -> s
 
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as list_file:
         for clip in clip_list:
-            list_file.write(f"file '{clip.as_posix()}'\n")
+            list_file.write(_format_concat_line(clip))
         list_file_path = Path(list_file.name)
 
     try:

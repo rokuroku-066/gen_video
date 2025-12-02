@@ -9,6 +9,7 @@ except ImportError:  # pragma: no cover - handled at call time
     types = None
 
 from .config import PipelineConfig, get_default_config, get_genai_client, use_fake_genai
+from .fake_genai import is_fake_client
 
 
 def _guess_mime_type(path: Path) -> str:
@@ -18,8 +19,12 @@ def _guess_mime_type(path: Path) -> str:
     return "image/png"
 
 
-def _require_types():
-    if use_fake_genai():
+def _is_fake_mode(client) -> bool:
+    return use_fake_genai() or is_fake_client(client)
+
+
+def _require_types(fake_mode: bool):
+    if fake_mode:
         return
     if types is None:
         raise ImportError(
@@ -75,10 +80,11 @@ def _generate_image_bytes(
     client,
     cfg: PipelineConfig,
 ) -> bytes:
-    _require_types()
+    fake_mode = _is_fake_mode(client)
+    _require_types(fake_mode)
     contents = []
     for ref_bytes in ref_images or []:
-        if use_fake_genai():
+        if fake_mode:
             contents.append(ref_bytes)
         else:
             contents.append(types.Part.from_bytes(data=ref_bytes, mime_type="image/png"))
@@ -87,7 +93,7 @@ def _generate_image_bytes(
         model=cfg.image_model,
         contents=contents,
         config=None
-        if use_fake_genai()
+        if fake_mode
         else types.GenerateContentConfig(
             response_modalities=["IMAGE"],
             image_config=types.ImageConfig(aspect_ratio=cfg.aspect_ratio),

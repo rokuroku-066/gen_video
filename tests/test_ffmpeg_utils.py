@@ -31,6 +31,27 @@ def test_concat_clips_invokes_ffmpeg_and_writes_output(monkeypatch, tmp_path):
     assert Path(result).read_bytes() == b"fake video data"
 
 
+def test_concat_clips_escapes_single_quotes(monkeypatch, tmp_path):
+    clip1 = tmp_path / "clip'1.mp4"
+    clip1.write_bytes(b"clip1")
+
+    captured_list_content = {}
+
+    def fake_run(cmd, capture_output, text):
+        list_file = Path(cmd[7])
+        captured_list_content["lines"] = list_file.read_text().splitlines()
+        output = Path(cmd[-1])
+        return _FakeCompletedProcess(output)
+
+    monkeypatch.setattr(ffmpeg_utils.subprocess, "run", fake_run)
+
+    output_path = tmp_path / "out.mp4"
+    result = ffmpeg_utils.concat_clips([clip1], output_path)
+
+    assert Path(result).exists()
+    assert captured_list_content["lines"] == ["file '" + clip1.as_posix().replace("'", "\\'") + "'"]
+
+
 def test_extract_last_frame_invokes_ffmpeg(monkeypatch, tmp_path):
     video_path = tmp_path / "clip.mp4"
     image_path = tmp_path / "frames" / "last.png"

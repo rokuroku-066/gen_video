@@ -229,7 +229,7 @@ class FakeGenaiClient:
 
     def __init__(self):
         # Ensure config.use_fake_genai() sees fake mode even if the caller forgets to set the env var.
-        os.environ.setdefault("USE_FAKE_GENAI", "1")
+        os.environ["USE_FAKE_GENAI"] = "1"
         self.is_fake_genai = True
         self.models = _Models(self)
         self.operations = _Operations()

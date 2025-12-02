@@ -58,3 +58,36 @@ def test_generate_all_segments_requires_two_frames(tmp_path):
     with pytest.raises(ValueError):
         videos.generate_all_segments(frames, prompts_data, tmp_path, client=FakeGenaiClient())
 
+
+def test_generate_all_segments_reports_missing_frame_image(tmp_path):
+    prompts_data = {
+        "frames": [
+            {"id": "A", "prompt": "p0"},
+            {"id": "B", "prompt": "p1", "change_from_previous": "move"},
+        ]
+    }
+    frame_a = tmp_path / "A.png"
+    frame_a.write_bytes(b"img")
+
+    with pytest.raises(KeyError, match="id=B"):
+        videos.generate_all_segments({"A": str(frame_a)}, prompts_data, tmp_path, client=FakeGenaiClient())
+
+
+def test_fake_client_ignores_env_setting(monkeypatch, tmp_path):
+    monkeypatch.setenv("USE_FAKE_GENAI", "0")
+
+    frame1 = tmp_path / "A.png"
+    frame2 = tmp_path / "B.png"
+    frame1.write_bytes(b"img1")
+    frame2.write_bytes(b"img2")
+
+    result = videos.generate_segment_for_pair(
+        frame1,
+        frame2,
+        "move",
+        tmp_path / "seg.mp4",
+        client=FakeGenaiClient(),
+    )
+
+    assert Path(result).exists()
+
