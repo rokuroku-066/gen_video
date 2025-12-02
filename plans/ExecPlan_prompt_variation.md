@@ -6,7 +6,7 @@ If this repository includes PLANS.md, follow all rules and conventions from PLAN
 
 ## Purpose / Big Picture
 
-Make consecutive keyframe images show clearer motion and composition changes while preserving the same character, style, and world. The goal is to adjust prompt wording and image-generation inputs so frames do not look nearly identical, yet still support multi-segment videos that maintain continuity.
+Make consecutive storyboard images show clearer motion and composition changes while preserving the same character, style, and world. The goal is to adjust prompt wording and image-generation inputs so frames do not look nearly identical, yet still support multi-segment videos that maintain continuity.
 
 ## Progress
 
@@ -36,7 +36,7 @@ Make consecutive keyframe images show clearer motion and composition changes whi
 
 Key files:
 - `video_pipeline/prompts.py` – builds storyboard prompts.
-- `video_pipeline/images.py` – turns prompts into keyframe images (Gemini 2.5 Flash Image).
+- `video_pipeline/images.py` – turns prompts into storyboard images (Gemini 2.5 Flash Image).
 - `video_pipeline/run_pipeline.py` – orchestrates prompt→images flow.
 - `tests/` – prompt and image helper tests.
 - `outputs/run_20251129T011905/frames/` – current example showing minimal variation.
@@ -51,7 +51,7 @@ Key files:
 ## Concrete Steps
 
 - Edit `prompts.py` `_build_prompt` to emphasize progressive action, camera movement, and non-identical frames; keep JSON schema unchanged.
-- In `images.py`, add a helper to compose per-frame image prompt strings using `global_style` + `change_from_previous` + consistency reminders; use it in `generate_keyframe_images` and `regenerate_keyframe_images`.
+- In `images.py`, add a helper to compose per-frame image prompt strings using `global_style` + `change_from_previous` + consistency reminders; use it in `generate_storyboard_images` and `regenerate_storyboard_images`.
 - Adjust `tests/test_images.py` (and others if needed) to assert the new composed prompt structure while keeping reference-byte anchoring behavior.
 - Optionally log or document sample output prompts for manual verification.
 
@@ -76,4 +76,4 @@ Key files:
 - Real API usage remains gated by `ENABLE_REAL_GENAI=1`; default/test runs must stay offline-safe.
 - Functions touched:
   - `generate_frame_prompts(...)` in `prompts.py` (template change only).
-  - `generate_keyframe_images(...)` and `regenerate_keyframe_images(...)` in `images.py` (prompt composition change).
+  - `generate_storyboard_images(...)` and `regenerate_storyboard_images(...)` in `images.py` (prompt composition change).

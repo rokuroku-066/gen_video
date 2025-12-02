@@ -33,7 +33,7 @@ Every ExecPlan in this repo must:
    Explain file paths, modules, and key concepts as if the reader has never seen the repo before.
 
 3. Be **outcome‑focused**.  
-   The plan must describe what the user will be able to do after the work is finished (for example: "From the Streamlit page, the user can upload an image, type a theme, choose the number of keyframes, click Generate, and download a long video created from multiple Veo clips").
+   The plan must describe what the user will be able to do after the work is finished (for example: "From the Streamlit page, the user can upload an image, type a theme, choose the number of storyboards, click Generate, and download a long video created from multiple Veo clips").
 
 4. Remain a **living document**.  
    As the agent discovers issues, edge cases, or better designs, it must:
@@ -149,7 +149,7 @@ Guidelines for these sections:
 
 This repository’s main goal is to build a **video generator** that:
 
-1. Keeps **visual consistency** across a sequence of keyframe images and the videos generated from them (same character, style, camera angle, and world).
+1. Keeps **visual consistency** across a sequence of storyboard images and the videos generated from them (same character, style, camera angle, and world).
 2. Produces a **final video longer than Veo’s per‑clip limit**, by generating multiple segments and stitching them together.
 
 From the end user’s point of view, the Web UI should:
@@ -158,11 +158,11 @@ From the end user’s point of view, the Web UI should:
 
   * Upload an **optional reference image** (used to anchor style and character for frame A).
   * Enter a **theme / prompt** in natural language.
-  * Choose a **number of keyframes** (e.g. 3–6).
+  * Choose a **number of storyboards** (e.g. 3–6).
 * When the user clicks a **Generate** button:
 
-  * Generate a set of keyframe prompts with a text Gemini model.
-  * Generate keyframe images with the Gemini 2.5 Flash Image model ("Nano Banana").
+  * Generate a set of storyboard prompts with a text Gemini model.
+  * Generate storyboard images with the Gemini 2.5 Flash Image model ("Nano Banana").
   * Generate short video clips for each consecutive pair of frames (A→B, B→C, …) with Veo 3.1.
   * Concatenate those clips into one longer video file (MP4).
   * Display the resulting video in the Web UI and provide a download link.
@@ -189,7 +189,7 @@ Recommended (but not mandatory) file structure for this repo:
   * Generate per‑frame prompts (A, B, C, …) that share a common "global style" and vary only in motion/pose.
 
 * `video_pipeline/images.py`
-  Functions that call the Gemini 2.5 Flash Image model (Nano Banana) to generate keyframe images.
+  Functions that call the Gemini 2.5 Flash Image model (Nano Banana) to generate storyboard images.
 
 * `video_pipeline/videos.py`
   Functions that call Veo 3.1 via `google-genai` to generate short clips between pairs of frames, and possibly to extend clips if needed.
@@ -258,7 +258,7 @@ ExecPlans should document:
 * Expected inputs:
 
   * Theme,
-  * Keyframe count,
+  * Storyboard count,
   * Optional reference image.
 * Expected behavior on "Generate":
 
@@ -277,14 +277,14 @@ When creating the first ExecPlan to implement the pipeline, use a description su
 
 * `Purpose / Big Picture`:
 
-  * After this work, a user can open the Streamlit app, provide a theme, optional reference image, and keyframe count, and obtain a longer‑than‑Veo‑limit video that maintains a consistent character and style.
+  * After this work, a user can open the Streamlit app, provide a theme, optional reference image, and storyboard count, and obtain a longer‑than‑Veo‑limit video that maintains a consistent character and style.
 
 * `Plan of Work` should roughly include:
 
   1. Setting up the Python environment and dependencies.
   2. Implementing `video_pipeline/config.py` with `get_genai_client()` gating based on `ENABLE_REAL_GENAI`.
   3. Implementing a prompt generation module that calls a Gemini text model and returns JSON with global style and per‑frame prompts.
-  4. Implementing an image generation module using Gemini 2.5 Flash Image ("Nano Banana") to produce keyframe PNG files.
+  4. Implementing an image generation module using Gemini 2.5 Flash Image ("Nano Banana") to produce storyboard PNG files.
   5. Implementing a video generation module using Veo 3.1 to create clips between consecutive frames.
   6. Implementing a concat module using `ffmpeg` to join the clips into a single MP4.
   7. Implementing the Streamlit UI (`app.py`) that glues user inputs to the pipeline.

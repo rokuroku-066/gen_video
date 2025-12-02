@@ -6,7 +6,7 @@ from video_pipeline import images
 from video_pipeline.fake_genai import FakeGenaiClient
 
 
-def test_regenerate_keyframe_images_overwrites_selected(monkeypatch, tmp_path):
+def test_regenerate_storyboard_images_overwrites_selected(monkeypatch, tmp_path):
     frames_dir = tmp_path / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
@@ -38,7 +38,7 @@ def test_regenerate_keyframe_images_overwrites_selected(monkeypatch, tmp_path):
 
     monkeypatch.setattr(images, "_generate_image_bytes", fake_generate_image_bytes)
 
-    updated = images.regenerate_keyframe_images(
+    updated = images.regenerate_storyboard_images(
         prompts_data,
         frame_paths,
         run_dir=tmp_path,
@@ -57,7 +57,7 @@ def test_regenerate_keyframe_images_overwrites_selected(monkeypatch, tmp_path):
     assert Path(updated["C"]).read_bytes() == b"C0"  # untouched frame remains
 
 
-def test_generate_keyframe_images_accumulates_references(monkeypatch, tmp_path):
+def test_generate_storyboard_images_accumulates_references(monkeypatch, tmp_path):
     prompts_data = {
         "frames": [
             {"id": "A", "prompt": "alpha"},
@@ -80,7 +80,7 @@ def test_generate_keyframe_images_accumulates_references(monkeypatch, tmp_path):
 
     monkeypatch.setattr(images, "_generate_image_bytes", fake_generate_image_bytes)
 
-    images.generate_keyframe_images(
+    images.generate_storyboard_images(
         prompts_data,
         output_dir=tmp_path,
         ref_image_path=ref_path,
@@ -96,7 +96,7 @@ def test_fake_client_forces_fake_mode(monkeypatch, tmp_path):
     monkeypatch.setenv("USE_FAKE_GENAI", "0")
 
     prompts_data = {"frames": [{"id": "A", "prompt": "alpha"}]}
-    paths = images.generate_keyframe_images(
+    paths = images.generate_storyboard_images(
         prompts_data,
         output_dir=tmp_path,
         client=FakeGenaiClient(),
