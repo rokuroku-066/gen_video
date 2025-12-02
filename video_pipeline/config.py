@@ -6,7 +6,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from dotenv import load_dotenv
+
 from .fake_genai import FakeGenaiClient
+
+load_dotenv()
 
 @dataclass
 class PipelineConfig:

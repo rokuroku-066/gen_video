@@ -14,8 +14,9 @@ Geminiテキストモデルのフレームプロンプト、Gemini 2.5 Flash Ima
 - 依存関係: `pip install -r requirements.txt`
 
 ## APIモードと環境変数
-- **REAL**: `ENABLE_REAL_GENAI=1` と `GEMINI_API_KEY`（または `GOOGLE_API_KEY`）を設定。オプションで Vertex AI 用に `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` を指定。
-- **FAKE**: `USE_FAKE_GENAI=1` を設定すると `google-genai` 非依存のフェイククライアントで安全に動作。Streamlit UI ではチェックボックスで同じモードを選択できます。
+- `.env` をリポジトリ直下に配置すると、`video_pipeline/config.py` 読み込み時と `app.py` 起動時に自動で読み込まれます（`python-dotenv` の `load_dotenv()` を使用）。
+- **REAL**: `.env` に `ENABLE_REAL_GENAI=1` と `GEMINI_API_KEY`（または `GOOGLE_API_KEY`）を設定。オプションで Vertex AI 用に `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` を指定。
+- **FAKE**: `.env` で `USE_FAKE_GENAI=1` を設定すると `google-genai` 非依存のフェイククライアントで安全に動作。Streamlit UI ではチェックボックスで同じモードを選択できます。
 - **DISABLED**: 上記いずれも未設定の場合、`get_genai_client()` は誤用防止のため例外を送出します。
 
 ## クイックスタート（Streamlit UI）
@@ -24,11 +25,10 @@ Geminiテキストモデルのフレームプロンプト、Gemini 2.5 Flash Ima
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# オフラインデモの場合
-export USE_FAKE_GENAI=1
-# 実APIを使う場合は代わりに
-# export ENABLE_REAL_GENAI=1
-# export GEMINI_API_KEY=your_key_here
+# `.env.example` をコピーして環境変数を設定
+cp .env.example .env
+# オフラインデモの場合は .env に USE_FAKE_GENAI=1 を残す
+# 実APIを使う場合は .env で ENABLE_REAL_GENAI=1 と GEMINI_API_KEY を設定
 
 streamlit run app.py
 ```
