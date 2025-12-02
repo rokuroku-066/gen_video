@@ -122,8 +122,7 @@ This ExecPlan assumes the repository will be organized roughly as follows:
     Global configuration (model names, environment options, output paths).
   - `prompts.py`  
     Functions to call Gemini text model and produce JSON describing:
-      - `global_style`
-      - `frames` (A, B, C, …)
+        - `frames` (A, B, C, …)
   - `images.py`  
     Functions to call **Gemini 2.5 Flash Image** to generate storyboard images from prompts (and reference images).
   - `videos.py`  
@@ -196,8 +195,7 @@ High‑level steps:
    - Use a Gemini text model (`gemini-2.5-flash`) via `google-genai` to:
      - Optionally **describe style** from the reference image (if provided),
      - Produce JSON with:
-       - `global_style`: string,
-       - `frames`: list of `{ "id": "A" | "B" | ..., "prompt": string, "change_from_previous": string | null }`.
+        - `frames`: list of `{ "id": "A" | "B" | ..., "prompt": string, "change_from_previous": string | null }`.
    - Ensure the prompts enforce:
      - Stable character & style,
      - Stable camera & environment,
@@ -334,8 +332,7 @@ Where possible, functions should log to stdout or to simple text logs under each
 - Example structure of a prompt JSON returned by `generate_frame_prompts`:
 
   ```json
-  {
-    "global_style": "Anime style, flat colors, small round yellow fairy character...",
+    {
     "frames": [
       {
         "id": "A",

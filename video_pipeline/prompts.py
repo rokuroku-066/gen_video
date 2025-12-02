@@ -30,7 +30,7 @@ def _build_prompt(theme: str, num_frames: int, motion_hint: Optional[str], has_r
     )
     prompt = f"""
 You are a storyboard generator for a multi-segment animation.
-Goal: produce a sequence of frame prompts. Frame A defines the baseline; frames B+ should only describe how the character and background evolve from the previous frame (pose/action, camera move, environment changes).
+Goal: produce a sequence of frame prompts. Frame A defines the baseline; every subsequent frame MUST show BOTH (a) a clear character pose/gesture/action change AND (b) a visible background/camera/environment change from the previous frame. No static backgrounds or frozen characters.
 
 Theme: {theme}
 Frames to produce: {frame_labels}
@@ -41,7 +41,8 @@ Rules:
 - Each frame represents an 8-second interval in the movie.
 - Frame A: full description (shot, composition, subject, environment) to establish the baseline.
 - Each subsequent frame: describe ONLY the visible change from the previous frame (pose/action, camera move like pan/tilt/dolly/orbit/closer/wider, environment evolution like fog shifts, lighting changes, parallax). Avoid restating the baseline.
-- Changes must be obvious at a glance; avoid near-duplicates.
+- For frames B onward: include BOTH a character motion change (pose/gesture) AND a background or camera change (lighting/weather/props/parallax/angle). Frames that keep either element static are not allowed.
+- Changes must be obvious at a glance; avoid near-duplicates; never reuse the same camera angle twice in a row.
 - Use "change_from_previous" to capture the specific visible change in 5-12 words; the frame prompt should focus on that delta, not repeat the whole scene.
 - Return ONLY JSON. Do not include markdown code fences.
 

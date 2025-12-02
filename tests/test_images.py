@@ -48,11 +48,7 @@ def test_regenerate_storyboard_images_overwrites_selected(monkeypatch, tmp_path)
 
     prompt_text, ref_images = calls[0]
     assert ref_images == [b"A0"]  # all prior frame bytes anchor regeneration
-    assert "Frame B (delta from prior frame)" in prompt_text
-    assert "attached reference gallery" in prompt_text
-    assert "Additional nuance: beta" in prompt_text
-    assert "Visible change: lifts hand and camera pans right" in prompt_text
-    assert "Force a noticeable shift" in prompt_text
+    assert prompt_text == "beta"  # use prompt as-is from prompts.py
     assert Path(updated["B"]).read_bytes().startswith(b"new-")  # regenerated
     assert Path(updated["C"]).read_bytes() == b"C0"  # untouched frame remains
 
@@ -70,11 +66,10 @@ def test_generate_storyboard_images_accumulates_references(monkeypatch, tmp_path
 
     generated_lookup = {"A": b"img-A", "B": b"img-B", "C": b"img-C"}
     calls: list[tuple[str, list[bytes]]] = []
+    order = ["A", "B", "C"]
 
     def fake_generate_image_bytes(prompt_text: str, ref_images: list[bytes], *, client, cfg):
-        frame_label = "?"
-        if "Frame" in prompt_text:
-            frame_label = prompt_text.split("Frame")[1].strip().split()[0].strip(":")[0]
+        frame_label = order[len(calls)]
         calls.append((frame_label, list(ref_images)))
         return generated_lookup[frame_label]
 

@@ -141,7 +141,7 @@ json_text = response.text
 data = json.loads(json_text)
 ```
 
-The ExecPlan should define the exact JSON shape (e.g. `{"global_style": "...", "frames": [...]}`).
+The ExecPlan should define the exact JSON shape (currently `{"frames": [...]}` only).
 
 ### Image generation (Nano Banana / Gemini 2.5 Flash Image)
 

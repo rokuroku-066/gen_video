@@ -12,7 +12,7 @@ Make consecutive storyboard images show clearer motion and composition changes w
 
 - [x] Capture requirements and create ExecPlan.
 - [x] Strengthen prompt template to demand visible per-frame changes.
-- [x] Enrich image-generation prompts with global style + explicit change descriptions.
+- [x] Simplify image-generation prompts to use per-frame prompt text directly (with change descriptions) while retaining reference chaining.
 - [x] Update/extend tests to match the new prompt composition.
 - [x] Validate with offline-safe checks (e.g., pytest) and note manual review guidance.
 
@@ -23,13 +23,13 @@ Make consecutive storyboard images show clearer motion and composition changes w
 ## Decision Log
 
 - Will keep reference-image chaining for consistency but inject stronger textual cues per frame so changes are visible.
-- Will compose image prompts from both `global_style` and each frame’s `change_from_previous` to push distinct poses/camera while keeping identity.
+- Will feed per-frame prompts (and their `change_from_previous`) directly into image generation while keeping reference-image chaining for consistency.
 - Will not change API gating; real calls remain behind `ENABLE_REAL_GENAI=1`.
 
 ## Outcomes & Retrospective
 
 - Prompt template now requires noticeable pose/camera changes per frame while keeping style/identity consistent.
-- Image generation composes prompts from `global_style` + per-frame text + change descriptions to force visible variation and reduce near-identical frames even with reference chaining.
+- Image generation now uses the per-frame prompt text directly (plus change descriptions and reference chaining) to force visible variation and reduce near-identical frames.
 - Offline validation: `python -m pytest` passes; manual visual review with real APIs is still needed when `ENABLE_REAL_GENAI=1` is enabled.
 
 ## Context and Orientation
@@ -44,14 +44,14 @@ Key files:
 ## Plan of Work
 
 1. Refine the text prompt template to require meaningful pose/camera progression per frame, still keeping consistent character/style.
-2. Add an image-prompt composer that blends `global_style`, per-frame prompt, and `change_from_previous` with explicit “visible change” instructions; reuse it for generation and regeneration paths.
-3. Update tests to align with the richer prompt text while preserving checks on reference chaining.
+2. Ensure image prompts use the per-frame prompt (and `change_from_previous` when present) directly, while preserving reference chaining across generation and regeneration.
+3. Update tests to align with the revised prompt handling while preserving checks on reference chaining.
 4. Run offline-safe validation (pytest) and note manual review steps for real API runs.
 
 ## Concrete Steps
 
 - Edit `prompts.py` `_build_prompt` to emphasize progressive action, camera movement, and non-identical frames; keep JSON schema unchanged.
-- In `images.py`, add a helper to compose per-frame image prompt strings using `global_style` + `change_from_previous` + consistency reminders; use it in `generate_storyboard_images` and `regenerate_storyboard_images`.
+- In `images.py`, simplify per-frame image prompt strings to pass through the planner’s prompt (fallback to `change_from_previous`) while keeping reference chaining in `generate_storyboard_images` and `regenerate_storyboard_images`.
 - Adjust `tests/test_images.py` (and others if needed) to assert the new composed prompt structure while keeping reference-byte anchoring behavior.
 - Optionally log or document sample output prompts for manual verification.
 

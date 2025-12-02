@@ -51,26 +51,15 @@ def _extract_image_bytes(response) -> bytes:
 
 
 def _compose_image_prompt(frame: dict) -> str:
-    """Combine per-frame prompt and change description, focusing on deltas after frame A."""
-    frame_id = frame.get("id") or "?"
+    """
+    Use the frame prompt produced by prompts.py as-is (minimal additions).
+    Fallback to change_from_previous if prompt text is missing.
+    """
     base_prompt = frame.get("prompt") or ""
-    change = frame.get("change_from_previous") or "incremental change to pose/camera/environment from previous frame."
-
-    if (frame_id or "").upper() == "A":
-        return (
-            f"Frame {frame_id} (baseline): {base_prompt}\n"
-            "If reference images are attached, extract their style, subject design, and palette and apply them here. "
-            "Establish the full scene, subject, outfit, lighting, and environment for subsequent frames; avoid loose sketches or simplified faces."
-        )
-
-    return (
-        f"Frame {frame_id} (delta from prior frame):\n"
-        f"- Use the attached reference gallery (previous frames plus any initial reference) as the visual anchor; carry forward the subject, outfit, lighting, and environment without restyling.\n"
-        f"- Visible change: {change}.\n"
-        f"- Additional nuance: {base_prompt}.\n"
-        "- Force a noticeable shift in pose/action or camera framing (pan/tilt/dolly/orbit/closer/wider) and evolve the environment (fog density, bioluminescent growth, tree parallax); avoid near-identical framing.\n"
-        "Do not reset the scene. Keep subject, outfit, camera lens, and world consistent; only apply the stated pose/camera/environment change."
-    )
+    if base_prompt:
+        return base_prompt
+    change = frame.get("change_from_previous")
+    return change or "incremental change from previous frame"
 
 
 def _generate_image_bytes(

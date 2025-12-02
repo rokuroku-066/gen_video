@@ -29,7 +29,10 @@ def _make_image_input(path: Path, *, client) -> types.Image:
     if _is_fake_mode(client):
         return path
     _require_types(fake_mode=False)
-    return types.Image.from_file(str(path), mime_type=_guess_mime_type(path))
+    return types.Image.from_file(
+        path=str(path),
+        mime_type=_guess_mime_type(path),
+    )
 
 
 def _require_types(fake_mode: bool):
