@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional, Sequence, Union
+from typing import Dict, Optional, Sequence, Union, Tuple
 
 try:
     from google.genai import types  # type: ignore
@@ -33,6 +33,15 @@ def _require_types(fake_mode: bool):
 
 
 def _extract_image_bytes(response) -> bytes:
+    """
+    Attempt to pull inline image bytes from various google-genai response shapes.
+    Falls back to common dict representations as well.
+    """
+    # Direct bytes
+    if isinstance(response, (bytes, bytearray)):
+        return response
+
+    # Attributes-based (SDK objects)
     parts = getattr(response, "parts", None)
     if not parts:
         candidates = getattr(response, "candidates", []) or []
@@ -41,13 +50,51 @@ def _extract_image_bytes(response) -> bytes:
             parts = getattr(content, "parts", None)
             if parts:
                 break
-    if not parts:
-        raise ValueError("Image generation response did not include any parts")
-    for part in parts:
-        inline_data = getattr(part, "inline_data", None)
-        if inline_data and getattr(inline_data, "data", None) is not None:
-            return inline_data.data
-    raise ValueError("Image generation response did not contain inline_data")
+    if parts:
+        for part in parts:
+            inline_data = getattr(part, "inline_data", None)
+            if inline_data and getattr(inline_data, "data", None) is not None:
+                return inline_data.data
+
+    # Dict-based responses
+    if isinstance(response, dict):
+        # direct inline_data
+        inline = response.get("inline_data") or response.get("inlineData")
+        if inline:
+            data = inline.get("data") if isinstance(inline, dict) else None
+            if data:
+                return data
+        # candidates path
+        for cand in response.get("candidates", []) or []:
+            content = cand.get("content") or {}
+            for part in content.get("parts", []) or []:
+                if isinstance(part, dict):
+                    inline = part.get("inline_data") or part.get("inlineData")
+                    if inline:
+                        data = inline.get("data") if isinstance(inline, dict) else None
+                        if data:
+                            return data
+        # generated_images style
+        for key in ("images", "generated_images", "generatedImages"):
+            imgs = response.get(key)
+            if imgs and isinstance(imgs, list):
+                first = imgs[0]
+                if isinstance(first, (bytes, bytearray)):
+                    return first
+                if isinstance(first, dict):
+                    data = first.get("data")
+                    if data:
+                        return data
+
+    debug_keys = []
+    if isinstance(response, dict):
+        debug_keys = list(response.keys())
+    elif response is not None:
+        debug_keys = [attr for attr in dir(response) if not attr.startswith("_")]
+    raise ValueError(
+        "Image generation response did not include any parts/inline_data "
+        f"(type={type(response)}, keys={debug_keys})"
+    )
 
 
 def _compose_image_prompt(frame: dict) -> str:
@@ -64,31 +111,45 @@ def _compose_image_prompt(frame: dict) -> str:
 
 def _generate_image_bytes(
     prompt_text: str,
-    ref_images: Optional[Sequence[bytes]],
+    ref_images: Optional[Sequence[tuple[bytes, str]]],
     *,
     client,
     cfg: PipelineConfig,
+    max_attempts: int = 2,
 ) -> bytes:
     fake_mode = _is_fake_mode(client)
     _require_types(fake_mode)
     contents = []
-    for ref_bytes in ref_images or []:
+    for ref_bytes, mime in ref_images or []:
         if fake_mode:
             contents.append(ref_bytes)
         else:
-            contents.append(types.Part.from_bytes(data=ref_bytes, mime_type="image/png"))
+            contents.append(types.Part.from_bytes(data=ref_bytes, mime_type=mime))
     contents.append(prompt_text)
-    response = client.models.generate_content(
-        model=cfg.image_model,
-        contents=contents,
-        config=None
-        if fake_mode
-        else types.GenerateContentConfig(
-            response_modalities=["IMAGE"],
-            image_config=types.ImageConfig(aspect_ratio=cfg.aspect_ratio),
-        ),
-    )
-    return _extract_image_bytes(response)
+    modality = None
+    if not fake_mode and hasattr(types, "Modality"):
+        modality = types.Modality.IMAGE
+
+    last_exc: Exception | None = None
+    for _ in range(max_attempts):
+        try:
+            response = client.models.generate_content(
+                model=cfg.image_model,
+                contents=contents,
+                config=None
+                if fake_mode
+                else types.GenerateContentConfig(
+                    response_modalities=[modality] if modality else ["IMAGE"],
+                    image_config=types.ImageConfig(aspect_ratio=cfg.aspect_ratio),
+                ),
+            )
+            return _extract_image_bytes(response)
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            continue
+
+    assert last_exc is not None
+    raise last_exc
 
 
 def generate_storyboard_images(
@@ -109,9 +170,10 @@ def generate_storyboard_images(
     frames_dir = run_dir / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
-    reference_images: list[bytes] = []
+    reference_images: list[tuple[bytes, str]] = []
     if ref_image_path:
-        reference_images.append(Path(ref_image_path).read_bytes())
+        ref_path = Path(ref_image_path)
+        reference_images.append((ref_path.read_bytes(), _guess_mime_type(ref_path)))
 
     generated_images: list[bytes] = []
 
@@ -120,9 +182,10 @@ def generate_storyboard_images(
     for frame in frames:
         frame_id = frame.get("id") or "X"
         prompt_text = _compose_image_prompt(frame)
+        ref_list = list(reference_images) + [(img, "image/png") for img in generated_images]
         image_bytes = _generate_image_bytes(
             prompt_text,
-            reference_images + generated_images,
+            ref_list,
             client=genai_client,
             cfg=cfg,
         )
@@ -156,9 +219,10 @@ def regenerate_storyboard_images(
     frames_dir.mkdir(parents=True, exist_ok=True)
 
     target_ids = set(frame_ids)
-    reference_images: list[bytes] = []
+    reference_images: list[tuple[bytes, str]] = []
     if ref_image_path:
-        reference_images.append(Path(ref_image_path).read_bytes())
+        ref_path = Path(ref_image_path)
+        reference_images.append((ref_path.read_bytes(), _guess_mime_type(ref_path)))
 
     generated_images: list[bytes] = []
 
@@ -171,9 +235,10 @@ def regenerate_storyboard_images(
 
         if needs_generate:
             prompt_text = _compose_image_prompt(frame)
+            ref_list = list(reference_images) + [(img, "image/png") for img in generated_images]
             image_bytes = _generate_image_bytes(
                 prompt_text,
-                reference_images + generated_images,
+                ref_list,
                 client=genai_client,
                 cfg=cfg,
             )

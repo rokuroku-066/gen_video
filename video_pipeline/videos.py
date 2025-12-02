@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 try:
     from google.genai import types  # type: ignore
@@ -25,14 +25,13 @@ def _is_fake_mode(client) -> bool:
     return use_fake_genai() or is_fake_client(client)
 
 
-def _make_image_input(path: Path, *, client) -> types.Image:
+def _make_image_input(path: Path, *, client) -> Any:
     if _is_fake_mode(client):
         return path
     _require_types(fake_mode=False)
-    return types.Image.from_file(
-        location=str(path),
-        mime_type=_guess_mime_type(path),
-    )
+    # Prefer inline bytes over file paths to avoid file-uri issues in Veo API.
+    data = Path(path).read_bytes()
+    return types.Part.from_bytes(data=data, mime_type=_guess_mime_type(path))
 
 
 def _require_types(fake_mode: bool):
@@ -87,24 +86,24 @@ def generate_segment_for_pair(
     )
 
     duration_seconds = cfg.segment_duration_seconds
-    if fake_mode:
-        operation = genai_client.models.generate_videos(
-            model=cfg.video_model,
-            prompt=prompt_text,
-            image=_make_image_input(frame1_path, client=genai_client),
-            config={
-                "aspect_ratio": cfg.aspect_ratio,
-                "duration_seconds": duration_seconds,
-                "last_frame": _make_image_input(frame2_path, client=genai_client),
-            },
-        )
-    else:
-        _require_types(fake_mode)
-        # Veo interpolation mode (image + last_frame) only supports 8-second clips.
-        if duration_seconds != 8:
-            duration_seconds = 8
+    # Veo interpolation only supports 8-second clips in real mode.
+    if not fake_mode and duration_seconds != 8:
+        duration_seconds = 8
 
-        operation = genai_client.models.generate_videos(
+    def _request_operation():
+        if fake_mode:
+            return genai_client.models.generate_videos(
+                model=cfg.video_model,
+                prompt=prompt_text,
+                image=_make_image_input(frame1_path, client=genai_client),
+                config={
+                    "aspect_ratio": cfg.aspect_ratio,
+                    "duration_seconds": duration_seconds,
+                    "last_frame": _make_image_input(frame2_path, client=genai_client),
+                },
+            )
+        _require_types(fake_mode)
+        return genai_client.models.generate_videos(
             model=cfg.video_model,
             prompt=prompt_text,
             image=_make_image_input(frame1_path, client=genai_client),
@@ -112,39 +111,54 @@ def generate_segment_for_pair(
                 aspect_ratio=cfg.aspect_ratio,
                 duration_seconds=duration_seconds,
                 last_frame=_make_image_input(frame2_path, client=genai_client),
+                generate_audio=False,  # explicit for Veo 3
             ),
         )
 
-    while not getattr(operation, "done", False):
-        time.sleep(5)
-        operation = genai_client.operations.get(operation)
+    max_attempts = 2
+    last_response_debug: list[str] = []
 
-    # Surface explicit backend error if present.
-    op_error = getattr(operation, "error", None)
-    if op_error is None and isinstance(operation, dict):
-        op_error = operation.get("error")
-    if op_error:
-        raise RuntimeError(f"Veo operation failed: {op_error}")
+    for attempt in range(max_attempts):
+        operation = _request_operation()
 
-    response = getattr(operation, "response", None) or getattr(operation, "result", None)
-    if response is None and isinstance(operation, dict):
-        response = operation.get("response") or operation.get("result")
+        while not getattr(operation, "done", False):
+            time.sleep(5)
+            operation = genai_client.operations.get(operation)
 
-    generated_videos = _extract_generated_videos(operation, response)
-    if not generated_videos:
-        debug_keys = []
+        op_error = getattr(operation, "error", None)
+        if op_error is None and isinstance(operation, dict):
+            op_error = operation.get("error")
+        if op_error:
+            if attempt < max_attempts - 1:
+                time.sleep(3)
+                continue
+            raise RuntimeError(f"Veo operation failed: {op_error}")
+
+        response = getattr(operation, "response", None) or getattr(operation, "result", None)
+        if response is None and isinstance(operation, dict):
+            response = operation.get("response") or operation.get("result")
+
+        generated_videos = _extract_generated_videos(operation, response)
+        if generated_videos:
+            video_obj = generated_videos[0]
+            genai_client.files.download(file=video_obj.video, download_path=str(output_path))
+            return str(output_path)
+
         if isinstance(response, dict):
-            debug_keys = list(response.keys())
-        else:
-            debug_keys = [attr for attr in dir(response) if not attr.startswith("_")] if response else []
+            last_response_debug = list(response.keys())
+        elif response is not None:
+            last_response_debug = [attr for attr in dir(response) if not attr.startswith("_")]
+
+        if attempt < max_attempts - 1:
+            time.sleep(3)
+            continue
+
         raise RuntimeError(
             "Video generation operation completed but did not return generated_videos "
-            f"(available fields: {debug_keys})"
+            f"(available fields: {last_response_debug})"
         )
 
-    video_obj = generated_videos[0]
-    genai_client.files.download(file=video_obj.video, download_path=str(output_path))
-    return str(output_path)
+    raise RuntimeError("Video generation failed after retries.")
 
 
 def generate_all_segments(

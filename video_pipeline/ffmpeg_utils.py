@@ -16,7 +16,7 @@ def extract_last_frame(video_path: Union[str, Path], output_image_path: Union[st
     """
     Extract (approximately) the last frame of a video to an image file.
 
-    Uses ``-sseof -0.1`` to seek near the end, then writes a single video frame.
+    Uses ``-sseof -1`` to seek near the end, then writes a single video frame.
     Parents of ``output_image_path`` are created automatically.
     """
 
@@ -28,7 +28,7 @@ def extract_last_frame(video_path: Union[str, Path], output_image_path: Union[st
         "ffmpeg",
         "-y",
         "-sseof",
-        "-0.1",
+        "-1",
         "-i",
         str(video_path),
         "-frames:v",
@@ -59,7 +59,7 @@ def _format_concat_line(path: Path) -> str:
     return f"file '{escaped}'\n"
 
 
-def concat_clips(clip_paths: Iterable[Union[str, Path]], output_path: Path) -> str:
+def concat_clips(clip_paths: Iterable[Union[str, Path]], output_path: Path, *, reencode_on_failure: bool = True) -> str:
     """
     Concatenate MP4 clips using ffmpeg concat demuxer.
     """
@@ -98,6 +98,26 @@ def concat_clips(clip_paths: Iterable[Union[str, Path]], output_path: Path) -> s
             str(output_path),
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0 and reencode_on_failure:
+            # Fallback: re-encode to a uniform codec to handle mixed inputs.
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(list_file_path),
+                "-c:v",
+                "libx264",
+                "-c:a",
+                "aac",
+                "-movflags",
+                "+faststart",
+                str(output_path),
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f"ffmpeg concat failed: {result.stderr}")
     finally:
