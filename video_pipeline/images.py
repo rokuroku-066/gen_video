@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Sequence, Union
 
 try:
     from google.genai import types  # type: ignore
@@ -69,14 +69,14 @@ def _compose_image_prompt(frame: dict) -> str:
 
 def _generate_image_bytes(
     prompt_text: str,
-    ref_bytes: Optional[bytes],
+    ref_images: Optional[Sequence[bytes]],
     *,
     client,
     cfg: PipelineConfig,
 ) -> bytes:
     _require_types()
     contents = []
-    if ref_bytes:
+    for ref_bytes in ref_images or []:
         if use_fake_genai():
             contents.append(ref_bytes)
         else:
@@ -113,9 +113,11 @@ def generate_keyframe_images(
     frames_dir = run_dir / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
-    prev_image_bytes: Optional[bytes] = None
+    reference_images: list[bytes] = []
     if ref_image_path:
-        prev_image_bytes = Path(ref_image_path).read_bytes()
+        reference_images.append(Path(ref_image_path).read_bytes())
+
+    generated_images: list[bytes] = []
 
     frame_paths: Dict[str, str] = {}
     frames = prompts_data.get("frames", [])
@@ -124,14 +126,14 @@ def generate_keyframe_images(
         prompt_text = _compose_image_prompt(frame)
         image_bytes = _generate_image_bytes(
             prompt_text,
-            prev_image_bytes,
+            reference_images + generated_images,
             client=genai_client,
             cfg=cfg,
         )
         image_path = frames_dir / f"frame_{frame_id}.png"
         image_path.write_bytes(image_bytes)
         frame_paths[frame_id] = str(image_path)
-        prev_image_bytes = image_path.read_bytes()
+        generated_images.append(image_bytes)
     return frame_paths
 
 
@@ -148,8 +150,8 @@ def regenerate_keyframe_images(
     """
     Regenerate only the specified frame IDs while keeping other frames intact.
 
-    The regeneration uses the latest prior frame (or the reference image for
-    frame A) as the stylistic anchor to maintain consistency.
+    The regeneration uses all prior frames (plus the optional reference image for
+    frame A) as stylistic anchors to maintain consistency.
     """
 
     cfg = config or get_default_config()
@@ -158,9 +160,11 @@ def regenerate_keyframe_images(
     frames_dir.mkdir(parents=True, exist_ok=True)
 
     target_ids = set(frame_ids)
-    prev_image_bytes: Optional[bytes] = None
+    reference_images: list[bytes] = []
     if ref_image_path:
-        prev_image_bytes = Path(ref_image_path).read_bytes()
+        reference_images.append(Path(ref_image_path).read_bytes())
+
+    generated_images: list[bytes] = []
 
     updated_paths = dict(frame_image_paths)
     frames = prompts_data.get("frames", [])
@@ -174,7 +178,7 @@ def regenerate_keyframe_images(
             prompt_text = _compose_image_prompt(frame)
             image_bytes = _generate_image_bytes(
                 prompt_text,
-                prev_image_bytes,
+                reference_images + generated_images,
                 client=genai_client,
                 cfg=cfg,
             )
@@ -183,6 +187,6 @@ def regenerate_keyframe_images(
             image_bytes = existing_path.read_bytes()
 
         updated_paths[frame_id] = str(existing_path)
-        prev_image_bytes = image_bytes
+        generated_images.append(image_bytes)
 
     return updated_paths
