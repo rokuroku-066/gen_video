@@ -5,7 +5,7 @@ This repository contains a Python project that builds a **video generation tool*
 - Gemini 2.5 Flash Image ("Nano Banana") for keyframe images,
 - Veo 3.1 for short video clips,
 - `ffmpeg` for concatenating clips,
-- Streamlit for a simple Web UI.
+- Streamlit for a guided, three-step Web UI (prompt entry → keyframe review/regeneration → video build).
 
 The primary goals of the system are:
 
@@ -15,7 +15,7 @@ The primary goals of the system are:
 
 ## How you (the agent) should work
 
-- You **cannot browse the internet** or open external documentation.
+- Prefer offline-safe workflows; real API calls must be explicitly opted in by a human.
 - You **can**:
   - Read and write files in this repository.
   - Run shell commands (for example `pip install`, `ffmpeg`, `streamlit run app.py`), if your environment allows it.
@@ -27,7 +27,7 @@ Because you cannot access online docs for `google-genai`, Veo, or Streamlit, you
 - Any ExecPlan files created for specific tasks,
 - The existing source code.
 
-Real calls to Gemini / Veo **cost money and quota**. In this repository, **real API usage is explicitly gated** and must never occur from automated tests.
+Real calls to Gemini / Veo **cost money and quota**. In this repository, **real API usage is explicitly gated** and must never occur from automated tests. The fake client (`USE_FAKE_GENAI=1`) is the expected default when running locally or in CI.
 
 
 ## When to use PLANS.md and ExecPlans
@@ -76,13 +76,11 @@ Environment variables:
 - For **real API usage gating in this repository**:
   - `ENABLE_REAL_GENAI=1` when a human explicitly wants to run end‑to‑end with the real Gemini / Veo APIs.
   - `USE_FAKE_GENAI=1` to force the built-in offline fake client (no network, deterministic placeholder media). This is the preferred default for demos and automated tests.
-  - When `ENABLE_REAL_GENAI` is unset or not `"1"`, **real network calls must not be performed**. Either:
-    - `get_genai_client()` must raise an error, or
-    - it must return a fake client that does not hit the network.
+  - When neither flag is present, `get_genai_client()` is expected to raise to avoid accidental network usage.
 
 Tools:
 
-- `ffmpeg` must be available on the PATH for video concatenation.
+- `ffmpeg` must be available on the PATH for video concatenation. The code extracts last frames and concatenates segments via the concat demuxer.
 - You may call `ffmpeg` via `subprocess.run` in Python or via shell commands.
 
 
