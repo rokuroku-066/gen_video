@@ -66,9 +66,12 @@ class _Operation:
 
 class _Files:
     @staticmethod
-    def download(file: str):
+    def download(file: str, download_path: str | None = None):
         path = Path(file)
-        return path.read_bytes()
+        data = path.read_bytes()
+        if download_path:
+            Path(download_path).write_bytes(data)
+        return data
 
 
 class _Operations:
