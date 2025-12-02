@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 import streamlit as st
+from dotenv import load_dotenv
 
 from video_pipeline.config import (
     describe_api_mode,
@@ -19,6 +20,8 @@ from video_pipeline.fake_genai import FakeGenaiClient
 from video_pipeline.images import regenerate_storyboard_images
 from video_pipeline.run_pipeline import build_video_from_frames, generate_initial_frames
 
+
+load_dotenv()
 
 st.set_page_config(page_title="AIアニメーションビルダー", layout="centered")
 st.title("AIアニメーションビルダー")

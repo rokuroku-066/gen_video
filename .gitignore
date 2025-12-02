@@ -26,6 +26,11 @@ venv/
 # Project outputs
 outputs/
 
+# Environment files
+.env
+.env.*
+!.env.example
+
 # OS noise
 .DS_Store
 Thumbs.db
