@@ -54,16 +54,17 @@ def _compose_image_prompt(frame: dict) -> str:
     if (frame_id or "").upper() == "A":
         return (
             f"Frame {frame_id} (baseline): {base_prompt}\n"
-            "Establish the full scene, subject, outfit, lighting, and environment for subsequent frames."
+            "If reference images are attached, extract their style, subject design, and palette and apply them here. "
+            "Establish the full scene, subject, outfit, lighting, and environment for subsequent frames; avoid loose sketches or simplified faces."
         )
 
     return (
         f"Frame {frame_id} (delta from prior frame):\n"
-        f"- Apply the previous frame as the visual baseline.\n"
+        f"- Use the attached reference gallery (previous frames plus any initial reference) as the visual anchor; carry forward the subject, outfit, lighting, and environment without restyling.\n"
         f"- Visible change: {change}.\n"
         f"- Additional nuance: {base_prompt}.\n"
         "- Force a noticeable shift in pose/action or camera framing (pan/tilt/dolly/orbit/closer/wider) and evolve the environment (fog density, bioluminescent growth, tree parallax); avoid near-identical framing.\n"
-        "Do not reset the scene. Keep subject, outfit, and world consistent; only apply the stated pose/camera/environment change."
+        "Do not reset the scene. Keep subject, outfit, camera lens, and world consistent; only apply the stated pose/camera/environment change."
     )
 
 

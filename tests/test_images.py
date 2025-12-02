@@ -45,6 +45,7 @@ def test_regenerate_keyframe_images_overwrites_selected(monkeypatch, tmp_path):
     prompt_text, ref_images = calls[0]
     assert ref_images == [b"A0"]  # all prior frame bytes anchor regeneration
     assert "Frame B (delta from prior frame)" in prompt_text
+    assert "attached reference gallery" in prompt_text
     assert "Additional nuance: beta" in prompt_text
     assert "Visible change: lifts hand and camera pans right" in prompt_text
     assert "Force a noticeable shift" in prompt_text
