@@ -52,7 +52,7 @@ def _extract_image_bytes(response) -> bytes:
 
 def _compose_image_prompt(frame: dict) -> str:
     """
-    Use the frame prompt produced by prompts.py as-is (minimal additions).
+    Use the frame prompt provided by the user (minimal additions).
     Fallback to change_from_previous if prompt text is missing.
     """
     base_prompt = frame.get("prompt") or ""
@@ -144,7 +144,7 @@ def regenerate_storyboard_images(
     config: Optional[PipelineConfig] = None,
 ) -> Dict[str, str]:
     """
-    Regenerate only the specified frame IDs while keeping other frames intact.
+    Regenerate (or generate if missing) only the specified frame IDs while keeping other frames intact.
 
     The regeneration uses all prior frames (plus the optional reference image for
     frame A) as stylistic anchors to maintain consistency.
@@ -167,10 +167,9 @@ def regenerate_storyboard_images(
     for frame in frames:
         frame_id = frame.get("id") or "X"
         existing_path = Path(frame_image_paths.get(frame_id, frames_dir / f"frame_{frame_id}.png"))
-        if not existing_path.exists():
-            raise FileNotFoundError(f"Expected existing frame image at {existing_path}")
+        needs_generate = frame_id in target_ids or not existing_path.exists()
 
-        if frame_id in target_ids:
+        if needs_generate:
             prompt_text = _compose_image_prompt(frame)
             image_bytes = _generate_image_bytes(
                 prompt_text,
@@ -178,6 +177,7 @@ def regenerate_storyboard_images(
                 client=genai_client,
                 cfg=cfg,
             )
+            existing_path.parent.mkdir(parents=True, exist_ok=True)
             existing_path.write_bytes(image_bytes)
         else:
             image_bytes = existing_path.read_bytes()

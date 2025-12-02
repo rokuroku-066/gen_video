@@ -48,7 +48,7 @@ Short tasks such as "fix this small bug" or "rename a function" may be done with
 - Keep side‑effects local; pipeline functions should:
   - Accept explicit parameters,
   - Return values or paths instead of relying on global state.
-- Use clear, descriptive names (e.g. `generate_frame_prompts`, `generate_storyboards`, `generate_segment_video`, `concat_clips`).
+- Use clear, descriptive names (e.g. `generate_storyboards`, `generate_segment_video`, `concat_clips`).
 - For configuration, use a dedicated module (for example `video_pipeline/config.py`) or dataclasses instead of scattering constants.
 
 
@@ -231,15 +231,14 @@ import streamlit as st
 from video_pipeline.run_pipeline import run_pipeline
 ```
 
-* UI elements:
+* UI elements (current single-tab flow):
 
   * `st.title("Gemini + Veo Animation Builder")` (or similar)
-  * A text area for the theme.
-  * A number input for storyboard count.
+  * Text areas for per-frame descriptions; controls to add/insert/delete frames (minimum 2).
   * A file uploader for an optional reference image.
-  * A button labeled "Generate video".
+  * Buttons to generate/regenerate each frame, generate all frames, and generate video.
 
-* When the button is clicked:
+* When video generation is triggered:
 
   * Save the uploaded file (if any) to a temporary directory.
   * Call the pipeline function(s).
@@ -265,7 +264,7 @@ You are encouraged to add at least basic tests. **Automated tests must not hit t
   * Do not call `get_genai_client()` from tests unless it is configured to return a fake.
 * Examples:
 
-  * A test that verifies `generate_frame_prompts` returns valid JSON with the expected keys when using a stub Gemini response.
+  * A test that verifies storyboard image regeneration works with fake clients.
   * A test that verifies `concat_clips` can join small, dummy MP4 files into a single output.
 
 Before considering a feature complete:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import string
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -18,7 +19,7 @@ from video_pipeline.config import (
 )
 from video_pipeline.fake_genai import FakeGenaiClient
 from video_pipeline.images import regenerate_storyboard_images
-from video_pipeline.run_pipeline import build_video_from_frames, generate_initial_frames
+from video_pipeline.run_pipeline import build_video_from_frames
 
 
 load_dotenv()
@@ -47,18 +48,11 @@ state.setdefault("frame_paths", None)
 state.setdefault("final_video_path", None)
 state.setdefault("selected_frames", [])
 state.setdefault("ref_path", None)
-state.setdefault("step1_complete", False)
-state.setdefault("step2_complete", False)
-state.setdefault("step3_complete", False)
-state.setdefault("prompt_inputs", {})
 state.setdefault("use_fake_mode", use_fake_genai())
+state.setdefault("frames", [{"id": "A", "prompt": ""}, {"id": "B", "prompt": ""}])
 
 
 def _reset_generation_state() -> None:
-    for key in list(state.keys()):
-        if str(key).startswith("prompt_input_"):
-            del state[key]
-
     state.update(
         run_dir=None,
         prompts_data=None,
@@ -66,25 +60,7 @@ def _reset_generation_state() -> None:
         final_video_path=None,
         selected_frames=[],
         ref_path=None,
-        step1_complete=False,
-        step2_complete=False,
-        step3_complete=False,
-        prompt_inputs={},
     )
-
-
-def _render_step_indicator() -> None:
-    steps = [
-        ("1. テーマと設定", True, state.step1_complete),
-        ("2. 絵コンテ確認・再生成", state.step1_complete, state.step2_complete),
-        ("3. 動画生成", state.step2_complete, state.step3_complete),
-    ]
-    completed = sum(int(complete) for _, __, complete in steps)
-    st.progress(completed / len(steps))
-    cols = st.columns(len(steps))
-    for col, (label, unlocked, complete) in zip(cols, steps):
-        status = "✅" if complete else ("🟢" if unlocked else "🔒")
-        col.markdown(f"{status} {label}")
 
 
 def _select_client(use_fake: bool):
@@ -106,160 +82,160 @@ def _render_mode_badge():
         st.warning("モード: API無効。リアルまたはフェイクを選択してください。")
 
 
-_render_step_indicator()
 _render_mode_badge()
 
-tabs = st.tabs(["テーマと設定", "絵コンテ確認・再生成", "動画生成"])
+# ---- Single-tab workflow: add/insert frames, per-frame generation, regen, and video build ---- #
 
-
-with tabs[0]:
-    theme = st.text_area("テーマ", height=120, placeholder="夜のネオン屋上を歩く小さな妖精...")
-    num_frames = st.number_input("絵コンテ（フレーム）数", min_value=2, max_value=8, value=3, step=1)
-    motion_hint = st.text_input(
-        "動きのヒント（任意）",
-        placeholder="カメラがゆっくり寄る、滑らかな動き",
+real_enabled = is_real_api_enabled()
+if not real_enabled:
+    state.use_fake_mode = st.checkbox(
+        "オフラインデモ（フェイク出力を使用）", value=state.use_fake_mode
     )
-    ref_file = st.file_uploader("参考画像（任意）", type=["png", "jpg", "jpeg"])
+    if not state.use_fake_mode:
+        st.info("実APIを使う場合は ENABLE_REAL_GENAI=1 をセットしてください。")
 
-    real_enabled = is_real_api_enabled()
-    if not real_enabled:
-        state.use_fake_mode = st.checkbox(
-            "オフラインデモ（フェイク出力を使用）", value=state.use_fake_mode
-        )
-        if not state.use_fake_mode:
-            st.info("実APIを使う場合は ENABLE_REAL_GENAI=1 をセットしてください。")
-
-    if st.button("絵コンテ画像を生成"):
-        if not theme.strip():
-            st.error("テーマを入力してください。")
-        else:
-            client = _select_client(state.use_fake_mode)
-            if client is None:
-                st.error("APIモードが未設定です。REALかフェイクを選択してください。")
-            else:
-                _reset_generation_state()
-                cfg = get_default_config()
-                run_dir = make_run_directory(cfg)
-                ref_path: Optional[Path] = None
-                if ref_file:
-                    ref_path = _save_uploaded_file(ref_file)
-                with st.spinner("絵コンテ画像を生成中です…"):
-                    try:
-                        prompts_data, frame_paths = generate_initial_frames(
-                            theme=theme,
-                            num_frames=int(num_frames),
-                            run_dir=run_dir,
-                            ref_image_path=ref_path,
-                            motion_hint=motion_hint or None,
-                            client=client,
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        st.error(f"画像生成に失敗しました: {exc}")
-                    else:
-                        state.run_dir = run_dir
-                        state.prompts_data = prompts_data
-                        state.frame_paths = frame_paths
-                        state.ref_path = ref_path
-                        state.step1_complete = True
-                        state.step2_complete = False
-                        state.step3_complete = False
-                        st.success("絵コンテ生成が完了しました。レビューしてください。")
+ref_file = st.file_uploader("参考画像（任意）", type=["png", "jpg", "jpeg"])
 
 
-with tabs[1]:
-    if not state.step1_complete:
-        st.info("まず「テーマと設定」タブで絵コンテを生成してください。")
+def _ensure_run_dir():
+    if state.run_dir is None:
+        cfg = get_default_config()
+        state.run_dir = make_run_directory(cfg)
 
-    if state.frame_paths and state.prompts_data:
-        st.subheader("生成された絵コンテ（各フレーム）")
-        columns = st.columns(2)
 
-        frames = state.prompts_data.get("frames", [])
+def _reindex_frames():
+    frames = state.frames
+    new_labels = list(string.ascii_uppercase[: len(frames)])
+    for frame, lbl in zip(frames, new_labels):
+        frame["id"] = lbl
+    if state.frame_paths:
+        new_paths = {}
         for frame in frames:
-            frame_id = frame.get("id") or "?"
-            prompt_text = frame.get("prompt") or ""
-            state.prompt_inputs.setdefault(frame_id, prompt_text)
-
-        for idx, frame in enumerate(frames):
-            frame_id = frame.get("id") or "?"
-            prompt_text = state.prompt_inputs.get(frame_id, frame.get("prompt") or "")
-            with columns[idx % 2]:
-                st.image(state.frame_paths.get(frame_id), caption=f"Frame {frame_id}")
-                edited_prompt = st.text_area(
-                    "再生成用プロンプトを編集",
-                    key=f"prompt_input_{frame_id}",
-                    value=prompt_text,
-                    height=140,
-                )
-                state.prompt_inputs[frame_id] = edited_prompt
-                frame["prompt"] = edited_prompt
-
-        frame_ids = [frame.get("id") or "?" for frame in frames]
-        selection = st.multiselect(
-            "再生成したいフレームを選択", frame_ids, default=state.get("selected_frames", [])
-        )
-        state.selected_frames = selection
-
-        if st.button("選択した絵コンテを再生成", disabled=not selection or not state.step1_complete):
-            client = _select_client(state.use_fake_mode)
-            if client is None:
-                st.error("APIモードが未設定です。REALかフェイクを選択してください。")
-            else:
-                with st.spinner("フレームを再生成中です…"):
-                    try:
-                        updated_paths = regenerate_storyboard_images(
-                            state.prompts_data,
-                            state.frame_paths,
-                            run_dir=state.run_dir,
-                            frame_ids=selection,
-                            ref_image_path=state.ref_path,
-                            client=client,
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        st.error(f"再生成に失敗しました: {exc}")
-                    else:
-                        state.frame_paths = updated_paths
-                        state.final_video_path = None
-                        state.step2_complete = False
-                        state.step3_complete = False
-                        st.success("選択した絵コンテを再生成しました。")
-
-        if st.button("絵コンテ確認済みとして次へ進む", disabled=not state.step1_complete):
-            state.step2_complete = True
-            state.step3_complete = False
-            st.success("絵コンテ確認が完了しました。『動画生成』タブへどうぞ。")
+            fid = frame["id"]
+            new_paths[fid] = state.frame_paths.get(fid, "")
+        state.frame_paths = new_paths
 
 
-with tabs[2]:
-    if not state.step2_complete:
-        st.info("『絵コンテ確認・再生成』タブでフレーム確認を完了してください。")
+col_add, col_ins = st.columns(2)
+with col_add:
+    new_prompt = st.text_input("末尾に追加するフレーム内容", key="add_prompt")
+    if st.button("末尾に追加"):
+        state.frames.append({"id": "Z", "prompt": new_prompt, "change_from_previous": ""})
+        _reindex_frames()
+with col_ins:
+    if state.frames:
+        positions = [f'{idx+1}: {frame["id"]}' for idx, frame in enumerate(state.frames)]
+        pos = st.selectbox("挿入位置を選択", positions, index=0)
+        insert_before = positions.index(pos)
+        ins_prompt = st.text_input("挿入するフレーム内容", key="insert_prompt")
+        if st.button("選択位置の前に挿入"):
+            state.frames.insert(
+                insert_before, {"id": "Z", "prompt": ins_prompt, "change_from_previous": ""}
+            )
+            _reindex_frames()
 
-    if st.button("レビュー済みフレームで動画を生成", disabled=not state.step2_complete):
-        client = _select_client(state.use_fake_mode)
+st.markdown("---")
+st.subheader("フレーム編集と逐次生成")
+
+if ref_file and state.ref_path is None:
+    state.ref_path = _save_uploaded_file(ref_file)
+
+client = _select_client(state.use_fake_mode)
+if client is None:
+    st.warning("APIモードが未設定です。REALかフェイクを選択してください。")
+
+for idx, frame in enumerate(state.frames):
+    st.markdown(f"**Frame {frame['id']}**")
+    frame["prompt"] = st.text_area(
+        "フレーム説明", value=frame.get("prompt", ""), key=f"prompt_{frame['id']}", height=120
+    )
+    frame["change_from_previous"] = st.text_input(
+        "動き/変化のメモ（任意）",
+        value=frame.get("change_from_previous", ""),
+        key=f"change_{frame['id']}",
+    )
+    if st.button("このフレームを生成/再生成", key=f"regen_{frame['id']}"):
         if client is None:
             st.error("APIモードが未設定です。REALかフェイクを選択してください。")
         else:
-            with st.spinner("動画を生成中です。しばらくお待ちください…"):
+            _ensure_run_dir()
+            prompts_data = {"frames": state.frames}
+            frame_paths = state.frame_paths or {}
+            with st.spinner("生成中..."):
                 try:
-                    final_path = build_video_from_frames(
+                    updated_paths = regenerate_storyboard_images(
+                        prompts_data,
+                        frame_paths,
                         run_dir=state.run_dir,
-                        prompts_data=state.prompts_data,
-                        frame_image_paths=state.frame_paths,
+                        frame_ids=[frame["id"]],
+                        ref_image_path=state.ref_path,
                         client=client,
                     )
                 except Exception as exc:  # noqa: BLE001
-                    st.error(f"動画の生成に失敗しました: {exc}")
+                    st.error(f"生成に失敗しました: {exc}")
                 else:
-                    state.final_video_path = final_path
-                    state.step3_complete = True
-                    st.success("生成が完了しました。")
+                    state.frame_paths = updated_paths
+                    state.prompts_data = prompts_data
+                    st.success(f"Frame {frame['id']} を生成しました。")
+    if state.frame_paths and frame["id"] in (state.frame_paths or {}):
+        st.image(state.frame_paths.get(frame["id"]), caption=f"Frame {frame['id']} プレビュー")
+    if len(state.frames) > 2 and st.button("このフレームを削除", key=f"delete_{frame['id']}"):
+        del state.frames[idx]
+        _reindex_frames()
+        st.experimental_rerun()
+    st.markdown("---")
 
-    if state.final_video_path:
-        st.video(str(state.final_video_path))
-        with open(state.final_video_path, "rb") as f:
-            st.download_button(
-                "動画をダウンロード",
-                data=f,
-                file_name=Path(state.final_video_path).name,
-                mime="video/mp4",
-            )
+if st.button("すべてのフレームを一括生成"):
+    if client is None:
+        st.error("APIモードが未設定です。REALかフェイクを選択してください。")
+    else:
+        _ensure_run_dir()
+        prompts_data = {"frames": state.frames}
+        with st.spinner("一括生成中..."):
+            try:
+                updated_paths = regenerate_storyboard_images(
+                    prompts_data,
+                    state.frame_paths or {},
+                    run_dir=state.run_dir,
+                    frame_ids=[f["id"] for f in state.frames],
+                    ref_image_path=state.ref_path,
+                    client=client,
+                )
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"生成に失敗しました: {exc}")
+            else:
+                state.frame_paths = updated_paths
+                state.prompts_data = prompts_data
+                st.success("全フレームを生成しました。")
+
+st.subheader("動画生成")
+if st.button("現在のフレームで動画を生成"):
+    if client is None:
+        st.error("APIモードが未設定です。REALかフェイクを選択してください。")
+    elif not state.frame_paths or len(state.frame_paths) < 2:
+        st.error("少なくとも2フレームの画像を生成してください。")
+    else:
+        _ensure_run_dir()
+        with st.spinner("動画を生成しています…"):
+            try:
+                final_path = build_video_from_frames(
+                    run_dir=state.run_dir,
+                    prompts_data={"frames": state.frames},
+                    frame_image_paths=state.frame_paths,
+                    client=client,
+                )
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"動画の生成に失敗しました: {exc}")
+            else:
+                state.final_video_path = final_path
+                st.success("動画生成が完了しました。")
+
+if state.final_video_path:
+    st.video(str(state.final_video_path))
+    with open(state.final_video_path, "rb") as f:
+        st.download_button(
+            "動画をダウンロード",
+            data=f,
+            file_name=Path(state.final_video_path).name,
+            mime="video/mp4",
+        )

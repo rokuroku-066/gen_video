@@ -48,7 +48,7 @@ def test_regenerate_storyboard_images_overwrites_selected(monkeypatch, tmp_path)
 
     prompt_text, ref_images = calls[0]
     assert ref_images == [b"A0"]  # all prior frame bytes anchor regeneration
-    assert prompt_text == "beta"  # use prompt as-is from prompts.py
+    assert prompt_text == "beta"  # use prompt as-is from user-provided frames
     assert Path(updated["B"]).read_bytes().startswith(b"new-")  # regenerated
     assert Path(updated["C"]).read_bytes() == b"C0"  # untouched frame remains
 

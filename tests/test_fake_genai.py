@@ -50,6 +50,10 @@ def test_run_pipeline_with_fake_client(monkeypatch, tmp_path):
 
     monkeypatch.setattr(ffmpeg_utils, "concat_clips", _fake_concat)
 
-    final_path = run_pipeline("demo theme", 2, client=client, config=cfg)
+    final_path = run_pipeline(
+        [{"id": "A", "prompt": "demo frame A"}, {"id": "B", "prompt": "demo frame B"}],
+        client=client,
+        config=cfg,
+    )
     assert Path(final_path).exists()
     assert Path(final_path).stat().st_size > 0

@@ -35,7 +35,7 @@ Make consecutive storyboard images show clearer motion and composition changes w
 ## Context and Orientation
 
 Key files:
-- `video_pipeline/prompts.py` – builds storyboard prompts.
+- (Deprecated) `video_pipeline/prompts.py` – prompt generation now user-supplied; this plan is kept for history.
 - `video_pipeline/images.py` – turns prompts into storyboard images (Gemini 2.5 Flash Image).
 - `video_pipeline/run_pipeline.py` – orchestrates prompt→images flow.
 - `tests/` – prompt and image helper tests.
@@ -50,7 +50,7 @@ Key files:
 
 ## Concrete Steps
 
-- Edit `prompts.py` `_build_prompt` to emphasize progressive action, camera movement, and non-identical frames; keep JSON schema unchanged.
+- (Skip) `prompts.py` edits are obsolete; keep references only for historical context.
 - In `images.py`, simplify per-frame image prompt strings to pass through the planner’s prompt (fallback to `change_from_previous`) while keeping reference chaining in `generate_storyboard_images` and `regenerate_storyboard_images`.
 - Adjust `tests/test_images.py` (and others if needed) to assert the new composed prompt structure while keeping reference-byte anchoring behavior.
 - Optionally log or document sample output prompts for manual verification.
@@ -75,5 +75,5 @@ Key files:
 - No new dependencies; continue using `google-genai`, `streamlit`, `ffmpeg`.
 - Real API usage remains gated by `ENABLE_REAL_GENAI=1`; default/test runs must stay offline-safe.
 - Functions touched:
-  - `generate_frame_prompts(...)` in `prompts.py` (template change only).
+- User-provided frame prompts are used directly (no `generate_frame_prompts`).
   - `generate_storyboard_images(...)` and `regenerate_storyboard_images(...)` in `images.py` (prompt composition change).

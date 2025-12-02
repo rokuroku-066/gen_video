@@ -56,7 +56,7 @@ Pain points:
    - `operations.get`.
    - `files.download`.
 2) Implement deterministic generators:
-   - Text: return JSON with `frames` and `change_from_previous` seeded by the theme and frame count.
+   - Text: return JSON with `frames` and `change_from_previous` seeded by the provided frame descriptions and requested frame count (no global motion hint).
    - Image: create simple 16:9 PNGs (e.g., solid color gradient with frame ID and change text overlaid) using Pillow.
    - Video: create short MP4 clips (1–2s) using `ffmpeg -f lavfi color` plus drawtext or by stitching two PNGs with `ffmpeg -loop 1` and `-t` to simulate motion; ensure duration matches config.segment_duration_seconds.
 3) Configuration wiring:
@@ -106,7 +106,7 @@ Pain points:
 
 ## Idempotence and Recovery
 
-- Fake generation is deterministic given theme + frame IDs; re-running creates a fresh `run_<timestamp>` without affecting prior runs.
+- Fake generation is deterministic given the supplied frame descriptions + frame IDs; re-running creates a fresh `run_<timestamp>` without affecting prior runs.
 - If ffmpeg is missing, fake video generation should raise a clear error; document fallback (e.g., skip video and warn).
 - Switching between fake and real modes only requires environment or UI toggle; no code changes.
 

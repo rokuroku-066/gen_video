@@ -17,12 +17,11 @@ From a user’s perspective:
 - The user opens a **Streamlit Web UI**.
 - In the UI, the user can:
   - Optionally upload a **reference image** (used to anchor the character / style of frame A).
-  - Type a **theme / prompt** (e.g. “a glowing fairy walking on a neon rooftop at night”).
-  - Choose the **number of storyboards** (e.g. 3–6).
+  - Enter **per-frame descriptions** for each storyboard frame (minimum 2, e.g., “Frame A: wide neon rooftop establishing”, “Frame B: hero starts walking toward camera”).
+  - Choose the **number of storyboards** (e.g. 3–6) to control how many frame descriptions are expected.
 - When the user clicks “Generate video”:
   1. The system calls a **Gemini text model** to generate:
-     - A **global style description** (character, art style, camera, world),
-     - A list of **per‑frame prompts** (A, B, C, …) that share the same style but differ in pose / motion.
+     - A list of **per‑frame prompts** (A, B, C, …) that rewrite the user descriptions into consistent style/camera language and highlight pose + environment deltas.
   2. The system calls **Gemini 2.5 Flash Image** (“Nano Banana”) to generate storyboard images for all frames:
      - Frame A optionally anchored on the user’s reference image.
      - Frame B generated with frame A as a reference image.
@@ -51,7 +50,7 @@ The two core goals are:
 - [x] Repo dependencies defined (`requirements.txt`).
 - [x] `video_pipeline` package created with modules:
   - [x] `config.py`
-  - [x] `prompts.py`
+- [x] (deprecated) `prompts.py` (prompt generation now user-supplied)
   - [x] `images.py`
   - [x] `videos.py`
   - [x] `ffmpeg_utils.py`
@@ -59,7 +58,7 @@ The two core goals are:
 - [x] Basic Streamlit UI (`app.py`) implemented.
 - [x] Storyboard review + selective regeneration flow exposed in Streamlit (see ExecPlan_image_review).
 - [x] Prompt template tightened to force visible per-frame changes (see ExecPlan_prompt_variation).
-- [ ] End-to-end happy-path tested (single run with a simple theme).
+- [ ] End-to-end happy-path tested (single run with simple per-frame descriptions).
 - [x] Minimal tests added (`tests/`).
 - [ ] This ExecPlan updated with final Outcomes & Retrospective.
 
@@ -120,9 +119,7 @@ This ExecPlan assumes the repository will be organized roughly as follows:
   - `__init__.py`
   - `config.py`  
     Global configuration (model names, environment options, output paths).
-  - `prompts.py`  
-    Functions to call Gemini text model and produce JSON describing:
-        - `frames` (A, B, C, …)
+  - (deprecated) `prompts.py` — prompt generation now user-supplied via UI.
   - `images.py`  
     Functions to call **Gemini 2.5 Flash Image** to generate storyboard images from prompts (and reference images).
   - `videos.py`  
@@ -130,10 +127,10 @@ This ExecPlan assumes the repository will be organized roughly as follows:
   - `ffmpeg_utils.py`  
     Wrapper functions to concatenate MP4 clips into a final video.
   - `run_pipeline.py`  
-    High‑level “glue” for the end‑to‑end flow (theme → prompts → images → segments → concatenated video).
+    High‑level “glue” for the end‑to‑end flow (per-frame descriptions → prompts → images → segments → concatenated video).
 
 - `tests/`
-  - `test_prompts.py`
+  - (deprecated) `test_prompts.py`
   - `test_ffmpeg_utils.py`
   - Others as needed.
 
@@ -190,16 +187,8 @@ High‑level steps:
 3. **Implement Gemini client helpers**
    - Optionally, create a separate module (e.g. `video_pipeline/clients.py`) that exposes `get_genai_client()` and related helpers.
 
-4. **Implement prompt generation (`video_pipeline/prompts.py`)**
-   - Provide a function `generate_frame_prompts(theme, num_frames, ref_image_bytes=None, motion_hint=None) -> dict`.
-   - Use a Gemini text model (`gemini-2.5-flash`) via `google-genai` to:
-     - Optionally **describe style** from the reference image (if provided),
-     - Produce JSON with:
-        - `frames`: list of `{ "id": "A" | "B" | ..., "prompt": string, "change_from_previous": string | null }`.
-   - Ensure the prompts enforce:
-     - Stable character & style,
-     - Stable camera & environment,
-     - Only small, progressive motion changes between frames.
+4. **Prompt input**
+   - Prompts are now provided directly by the user per frame in the UI; no automatic prompt-generation module is used.
 
 5. **Implement image generation (`video_pipeline/images.py`)**
    - Provide functions:
@@ -231,8 +220,8 @@ High‑level steps:
 
 8. **Implement pipeline orchestrator (`video_pipeline/run_pipeline.py`)**
    - Provide:
-     - `run_pipeline(theme, num_frames, ref_image_path=None, motion_hint=None) -> str`
-       - Returns the final video path.
+     - `run_pipeline(frame_descriptions, ref_image_path=None) -> str`
+      - Returns the final video path.
    - Steps:
      - Create a new run directory (`outputs/run_<timestamp_or_uuid>/`).
      - Call `generate_frame_prompts`.
@@ -286,13 +275,13 @@ To consider this ExecPlan implemented successfully, the following manual checks 
      streamlit run app.py
      ```
 
-   - The browser opens with the app showing theme input, storyboard selector, reference image uploader, and generate button.
+   - The browser opens with the app showing per-frame description inputs, storyboard selector, reference image uploader, and generate button.
 
 3. **End‑to‑end video generation**
 
    - In the Streamlit app (with `ENABLE_REAL_GENAI=1` set in the environment):
-     - Enter a simple theme (e.g. “a yellow fairy standing on a rooftop at night, slowly walking toward the camera”).
-     - Set `num_frames = 3`.
+     - Enter per-frame descriptions (e.g., A: “yellow fairy on a rooftop at night”, B: “fairy walks toward camera”, C: “close-up with wind in hair”).
+     - Set `num_frames = 3` (so three description fields appear).
      - Optionally upload a small PNG or JPEG as reference.
      - Click “Generate video”.
    - The app shows progress (“Generating video…”).
@@ -317,7 +306,7 @@ To consider this ExecPlan implemented successfully, the following manual checks 
 ## Idempotence and Recovery
 
 - Prompt generation, image generation, and video segment generation are **purely additive**:
-  - Re‑running the pipeline for the same theme will create a new `run_<id>` folder without affecting earlier runs.
+  - Re‑running the pipeline for the same frame descriptions will create a new `run_<id>` folder without affecting earlier runs.
 - If Veo segment generation fails for a particular pair:
   - Delete the partial clip file, fix the issue, and re‑run `generate_all_segments` or `run_pipeline`.
 - If ffmpeg concatenation fails:
@@ -447,8 +436,8 @@ Summary of assumed interfaces to external libraries. These are not exact type si
     import streamlit as st
 
     st.title("...")
-    theme = st.text_area("Theme")
     num_frames = st.number_input("Frames", min_value=2, max_value=8, value=3)
+    frame_descriptions = [st.text_area(f"Frame {idx+1} description") for idx in range(int(num_frames))]
     file = st.file_uploader("Reference image", type=["png", "jpg", "jpeg"])
 
     if st.button("Generate video"):

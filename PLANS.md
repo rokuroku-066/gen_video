@@ -33,7 +33,7 @@ Every ExecPlan in this repo must:
    Explain file paths, modules, and key concepts as if the reader has never seen the repo before.
 
 3. Be **outcome‑focused**.  
-   The plan must describe what the user will be able to do after the work is finished (for example: "From the Streamlit page, the user can upload an image, type a theme, choose the number of storyboards, click Generate, and download a long video created from multiple Veo clips").
+   The plan must describe what the user will be able to do after the work is finished (for example: "From the Streamlit page, the user can upload an image, enter per-frame descriptions, choose the number of storyboards, click Generate, and download a long video created from multiple Veo clips").
 
 4. Remain a **living document**.  
    As the agent discovers issues, edge cases, or better designs, it must:
@@ -117,7 +117,7 @@ Guidelines for these sections:
   List concrete commands and exact file edits. For example:
 
   * "From the repo root, run `pip install -r requirements.txt`."
-  * "Create `video_pipeline/prompts.py` with a `generate_frame_prompts(...)` function as described in Interfaces and Dependencies."
+  * (Deprecated) Prompt generator: frame prompts are now entered by the user; no `prompts.py` is required.
 
 * **Validation and Acceptance**
   Explain how to run and test the system end‑to‑end, and how a human can tell that it works. For this project, that usually means running the Streamlit app, creating a test video, and checking that:
@@ -157,11 +157,11 @@ From the end user’s point of view, the Web UI should:
 * Allow the user to:
 
   * Upload an **optional reference image** (used to anchor style and character for frame A).
-  * Enter a **theme / prompt** in natural language.
-  * Choose a **number of storyboards** (e.g. 3–6).
+  * Enter **per-frame descriptions** in natural language (minimum 2).
+  * Choose a **number of storyboards** (e.g. 3–6) to determine how many descriptions are expected.
 * When the user clicks a **Generate** button:
 
-  * Generate a set of storyboard prompts with a text Gemini model.
+* (Now user-driven) Accept storyboard prompts entered by the user in the UI.
   * Generate storyboard images with the Gemini 2.5 Flash Image model ("Nano Banana").
   * Generate short video clips for each consecutive pair of frames (A→B, B→C, …) with Veo 3.1.
   * Concatenate those clips into one longer video file (MP4).
@@ -182,12 +182,6 @@ Recommended (but not mandatory) file structure for this repo:
   * Enforcing the `ENABLE_REAL_GENAI` contract (i.e. refusing to create a real network client unless that flag is set),
   * Optionally providing or delegating to fake clients for tests.
 
-* `video_pipeline/prompts.py`
-  Functions that call a Gemini text model to:
-
-  * Optionally **describe the style** of the reference image,
-  * Generate per‑frame prompts (A, B, C, …) that share a common "global style" and vary only in motion/pose.
-
 * `video_pipeline/images.py`
   Functions that call the Gemini 2.5 Flash Image model (Nano Banana) to generate storyboard images.
 
@@ -198,7 +192,7 @@ Recommended (but not mandatory) file structure for this repo:
   Functions that run `ffmpeg` to concatenate MP4 clips safely.
 
 * `video_pipeline/run_pipeline.py`
-  High‑level orchestration: theme → prompts → images → segments → final MP4.
+  High‑level orchestration: user-supplied frame prompts → images → segments → final MP4.
 
 * `tests/`
   Basic smoke tests (for example: generating prompts without hitting external APIs via fakes, or verifying that `concat_videos` joins small dummy MP4 files).
@@ -277,13 +271,13 @@ When creating the first ExecPlan to implement the pipeline, use a description su
 
 * `Purpose / Big Picture`:
 
-  * After this work, a user can open the Streamlit app, provide a theme, optional reference image, and storyboard count, and obtain a longer‑than‑Veo‑limit video that maintains a consistent character and style.
+  * After this work, a user can open the Streamlit app, provide per-frame descriptions (plus optional reference image and storyboard count), and obtain a longer‑than‑Veo‑limit video that maintains a consistent character and style.
 
 * `Plan of Work` should roughly include:
 
   1. Setting up the Python environment and dependencies.
   2. Implementing `video_pipeline/config.py` with `get_genai_client()` gating based on `ENABLE_REAL_GENAI`.
-  3. Implementing a prompt generation module that calls a Gemini text model and returns JSON with global style and per‑frame prompts.
+  3. Accepting user-entered per‑frame prompts (no automatic prompt generation module).
   4. Implementing an image generation module using Gemini 2.5 Flash Image ("Nano Banana") to produce storyboard PNG files.
   5. Implementing a video generation module using Veo 3.1 to create clips between consecutive frames.
   6. Implementing a concat module using `ffmpeg` to join the clips into a single MP4.
