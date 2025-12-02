@@ -29,21 +29,7 @@ def _make_image_input(path: Path, *, client) -> types.Image:
     if _is_fake_mode(client):
         return path
     _require_types(fake_mode=False)
-    return types.Image.from_file(location=str(path), mime_type=_guess_mime_type(path))
-
-
-def _extract_video_bytes(download) -> bytes:
-    if isinstance(download, (bytes, bytearray)):
-        return bytes(download)
-    for attr in ("content", "data", "payload"):
-        value = getattr(download, attr, None)
-        if value is not None:
-            if isinstance(value, (bytes, bytearray)):
-                return bytes(value)
-    read_method = getattr(download, "read", None)
-    if callable(read_method):
-        return read_method()
-    raise ValueError("Could not extract bytes from download response")
+    return types.Image.from_file(str(path), mime_type=_guess_mime_type(path))
 
 
 def _require_types(fake_mode: bool):
@@ -154,9 +140,7 @@ def generate_segment_for_pair(
         )
 
     video_obj = generated_videos[0]
-    download = genai_client.files.download(file=video_obj.video)
-    video_bytes = _extract_video_bytes(download)
-    output_path.write_bytes(video_bytes)
+    genai_client.files.download(file=video_obj.video, download_path=str(output_path))
     return str(output_path)
 
 
