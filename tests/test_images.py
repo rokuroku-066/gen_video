@@ -1,5 +1,9 @@
 from pathlib import Path
+
+import pytest
+
 from video_pipeline import images
+from video_pipeline.fake_genai import FakeGenaiClient
 
 
 def test_regenerate_keyframe_images_overwrites_selected(monkeypatch, tmp_path):
@@ -86,4 +90,18 @@ def test_generate_keyframe_images_accumulates_references(monkeypatch, tmp_path):
     assert calls[0] == ("A", [b"REF"])
     assert calls[1] == ("B", [b"REF", b"img-A"])
     assert calls[2] == ("C", [b"REF", b"img-A", b"img-B"])
+
+
+def test_fake_client_forces_fake_mode(monkeypatch, tmp_path):
+    monkeypatch.setenv("USE_FAKE_GENAI", "0")
+
+    prompts_data = {"frames": [{"id": "A", "prompt": "alpha"}]}
+    paths = images.generate_keyframe_images(
+        prompts_data,
+        output_dir=tmp_path,
+        client=FakeGenaiClient(),
+    )
+
+    image_path = Path(paths["A"])
+    assert image_path.exists()
 
