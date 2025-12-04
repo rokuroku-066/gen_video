@@ -185,6 +185,19 @@ for idx, frame in enumerate(state.frames):
         st.experimental_rerun()
     st.markdown("---")
 
+st.subheader("プレビュー一覧")
+if state.frame_paths:
+    for frame in state.frames:
+        frame_id = frame.get("id")
+        frame_path = state.frame_paths.get(frame_id) if frame_id else None
+        if not frame_path:
+            continue
+        with st.container(border=True):
+            st.markdown(f"**Frame {frame_id}**\n\n{frame.get('prompt', '')}")
+            st.image(frame_path)
+else:
+    st.info("生成済みプレビューはまだありません。")
+
 if st.button("すべてのフレームを一括生成"):
     if client is None:
         st.error("APIモードが未設定です。REALかフェイクを選択してください。")
