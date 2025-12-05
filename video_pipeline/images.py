@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional, Sequence, Union, Tuple
+from typing import Dict, Optional, Sequence, Union
 
 try:
     from google.genai import types  # type: ignore
@@ -111,7 +111,7 @@ def _compose_image_prompt(frame: dict) -> str:
 
 def _generate_image_bytes(
     prompt_text: str,
-    ref_images: Optional[Sequence[tuple[bytes, str]]],
+    ref_images: Optional[Sequence[Union[bytes, tuple[bytes, str]]]],
     *,
     client,
     cfg: PipelineConfig,
@@ -120,7 +120,8 @@ def _generate_image_bytes(
     fake_mode = _is_fake_mode(client)
     _require_types(fake_mode)
     contents = []
-    for ref_bytes, mime in ref_images or []:
+    for ref in ref_images or []:
+        ref_bytes, mime = (ref, "image/png") if isinstance(ref, (bytes, bytearray)) else ref
         if fake_mode:
             contents.append(ref_bytes)
         else:
@@ -170,10 +171,10 @@ def generate_storyboard_images(
     frames_dir = run_dir / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
-    reference_images: list[tuple[bytes, str]] = []
+    reference_images: list[bytes] = []
     if ref_image_path:
         ref_path = Path(ref_image_path)
-        reference_images.append((ref_path.read_bytes(), _guess_mime_type(ref_path)))
+        reference_images.append(ref_path.read_bytes())
 
     generated_images: list[bytes] = []
 
@@ -182,7 +183,7 @@ def generate_storyboard_images(
     for frame in frames:
         frame_id = frame.get("id") or "X"
         prompt_text = _compose_image_prompt(frame)
-        ref_list = list(reference_images) + [(img, "image/png") for img in generated_images]
+        ref_list = list(reference_images) + list(generated_images)
         image_bytes = _generate_image_bytes(
             prompt_text,
             ref_list,
@@ -219,10 +220,10 @@ def regenerate_storyboard_images(
     frames_dir.mkdir(parents=True, exist_ok=True)
 
     target_ids = set(frame_ids)
-    reference_images: list[tuple[bytes, str]] = []
+    reference_images: list[bytes] = []
     if ref_image_path:
         ref_path = Path(ref_image_path)
-        reference_images.append((ref_path.read_bytes(), _guess_mime_type(ref_path)))
+        reference_images.append(ref_path.read_bytes())
 
     generated_images: list[bytes] = []
 
@@ -235,7 +236,7 @@ def regenerate_storyboard_images(
 
         if needs_generate:
             prompt_text = _compose_image_prompt(frame)
-            ref_list = list(reference_images) + [(img, "image/png") for img in generated_images]
+            ref_list = list(reference_images) + list(generated_images)
             image_bytes = _generate_image_bytes(
                 prompt_text,
                 ref_list,
