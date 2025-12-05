@@ -4,7 +4,7 @@ Geminiテキストモデルのフレームプロンプト、Gemini 2.5 Flash Ima
 
 ## 特長
 - 単一タブでフレームを追加・挿入しつつ、1フレームずつ生成/再生成をプレビューしながら進行。
-- 生成済みの絵コンテを確認し、内容を編集して即再生成可能。途中でフレーム数を増減・挿入できる。
+- 生成済みの絵コンテを確認し、内容を編集して即再生成可能。途中でフレーム数を増減・挿入・削除できる。
 - Veo 3.1のフレーム間補間で各セグメントを作り、`ffmpeg` concatデマルチプレクサで1本のMP4に結合。
 - `ENABLE_REAL_GENAI=1` を明示した場合のみ実APIを使用。`USE_FAKE_GENAI=1` で完全オフラインのフェイク出力を強制でき、UIからも切り替え可能。
 
@@ -16,8 +16,8 @@ Geminiテキストモデルのフレームプロンプト、Gemini 2.5 Flash Ima
 ## APIモードと環境変数
 - `.env` をリポジトリ直下に配置すると、`video_pipeline/config.py` 読み込み時と `app.py` 起動時に自動で読み込まれます（`python-dotenv` の `load_dotenv()` を使用）。
 - **REAL**: `.env` に `ENABLE_REAL_GENAI=1` と `GEMINI_API_KEY`（または `GOOGLE_API_KEY`）を設定。オプションで Vertex AI 用に `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` を指定。
-- **FAKE**: `.env` で `USE_FAKE_GENAI=1` を設定すると `google-genai` 非依存のフェイククライアントで安全に動作。Streamlit UI ではチェックボックスで同じモードを選択できます。
-- **DISABLED**: 上記いずれも未設定の場合、`get_genai_client()` は誤用防止のため例外を送出します。
+- **FAKE**: `.env` で `USE_FAKE_GENAI=1` を設定すると `google-genai` 非依存のフェイククライアントで安全に動作。Streamlit UI ではチェックボックスで同じモードを選択できます（REAL が無効な場合はフェイクを既定選択）。
+- **DISABLED**: 上記いずれも未設定の場合、`get_genai_client()` は誤用防止のため例外を送出し、UI でも警告バナーが表示されます。
 
 ## クイックスタート（Streamlit UI）
 ```bash
@@ -33,25 +33,50 @@ cp .env.example .env
 streamlit run app.py
 ```
 UIの流れ（単一タブ）:
-1. フレームの説明を入力して末尾追加/途中挿入する（最低2フレーム）。
-2. 各フレームカードで「生成/再生成」を押し、画像を確認しながら必要なフレームだけ更新。
+1. フレームの説明を入力して末尾追加/途中挿入する（最低2フレーム）。「動き/変化のメモ」に次のフレームへ向けたモーションヒントを残せます。
+2. 各フレームカードで「生成/再生成」を押し、画像を確認しながら必要なフレームだけ更新。不要になったフレームは削除可能。
 3. 「すべてのフレームを一括生成」で未生成分をまとめて作成も可能。
-4. 「現在のフレームで動画を生成」でセグメントを結合し、連結済みMP4を再生・ダウンロード。出力は `outputs/run_<timestamp>/` 配下に保存されます。
+4. 「現在のフレームで動画を生成」でセグメントを結合し、連結済みMP4を再生・ダウンロード。出力は `outputs/run_<timestamp>/` 配下の `frames/`（絵コンテPNG）と `segments/`（Veoクリップ）を含むランディレクトリに保存されます。
 
 ## パイプラインのコード利用例
 `USE_FAKE_GENAI=1` または `ENABLE_REAL_GENAI=1` を設定した上で、Python から直接呼び出せます。
 ```python
-from video_pipeline.run_pipeline import run_pipeline
+from pathlib import Path
+
+from video_pipeline.run_pipeline import build_video_from_frames, run_pipeline
+
+frames = [
+    {"id": "A", "prompt": "夜のネオン屋上で主人公が立つワイドショット"},
+    {
+        "id": "B",
+        "prompt": "主人公がカメラに向かって歩き出す",
+        "change_from_previous": "ゆっくり前進しながらカメラに寄る",
+    },
+    {
+        "id": "C",
+        "prompt": "カメラが寄り、風で髪がなびくクローズアップ",
+        "change_from_previous": "クロースアップに切り替わる",
+    },
+]
 
 final_path = run_pipeline(
-    frames=[
-        {"id": "A", "prompt": "夜のネオン屋上で主人公が立つワイドショット"},
-        {"id": "B", "prompt": "主人公がカメラに向かって歩き出す"},
-        {"id": "C", "prompt": "カメラが寄り、風で髪がなびくクローズアップ"},
-    ],
+    frames=frames,
     ref_image_path=None,           # または PNG/JPEG への Path
 )
 print("Video at:", final_path)
+
+# 既存の絵コンテがある場合に動画だけ作り直す例
+final_path = build_video_from_frames(
+    run_dir=Path("outputs/run_20240601T120000"),
+    prompts_data={"frames": frames},
+    frame_image_paths={
+        "A": "outputs/run_20240601T120000/frames/frame_A.png",
+        "B": "outputs/run_20240601T120000/frames/frame_B.png",
+        "C": "outputs/run_20240601T120000/frames/frame_C.png",
+    },
+    client=None,  # None なら環境変数に合わせて自動選択
+)
+print("Rebuilt video at:", final_path)
 ```
 絵コンテだけを再生成したい場合は `video_pipeline.images.regenerate_storyboard_images` を直接使えます。
 
