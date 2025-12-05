@@ -145,45 +145,65 @@ if client is None:
     st.warning("APIモードが未設定です。REALかフェイクを選択してください。")
 
 for idx, frame in enumerate(state.frames):
-    st.markdown(f"**Frame {frame['id']}**")
-    frame["prompt"] = st.text_area(
-        "フレーム説明", value=frame.get("prompt", ""), key=f"prompt_{frame['id']}", height=120
-    )
-    frame["change_from_previous"] = st.text_input(
-        "動き/変化のメモ（任意）",
-        value=frame.get("change_from_previous", ""),
-        key=f"change_{frame['id']}",
-    )
-    if st.button("このフレームを生成/再生成", key=f"regen_{frame['id']}"):
-        if client is None:
-            st.error("APIモードが未設定です。REALかフェイクを選択してください。")
-        else:
-            _ensure_run_dir()
-            prompts_data = {"frames": state.frames}
-            frame_paths = state.frame_paths or {}
-            with st.spinner("生成中..."):
-                try:
-                    updated_paths = regenerate_storyboard_images(
-                        prompts_data,
-                        frame_paths,
-                        run_dir=state.run_dir,
-                        frame_ids=[frame["id"]],
-                        ref_image_path=state.ref_path,
-                        client=client,
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    st.error(f"生成に失敗しました: {exc}")
+    with st.container(border=True):
+        header_col, _ = st.columns([1, 3])
+        with header_col:
+            st.markdown(f"**Frame {frame['id']}**")
+
+        col_prompt, col_preview = st.columns([2, 1])
+        with col_prompt:
+            frame["prompt"] = st.text_area(
+                "フレーム説明",
+                value=frame.get("prompt", ""),
+                key=f"prompt_{frame['id']}",
+                height=120,
+            )
+            frame["change_from_previous"] = st.text_input(
+                "動き/変化のメモ（任意）",
+                value=frame.get("change_from_previous", ""),
+                key=f"change_{frame['id']}",
+            )
+
+        with col_preview:
+            if state.frame_paths and frame["id"] in (state.frame_paths or {}):
+                st.image(
+                    state.frame_paths.get(frame["id"]),
+                    caption=f"Frame {frame['id']} プレビュー",
+                )
+
+        st.divider()
+        col_regen, col_delete = st.columns(2)
+        with col_regen:
+            if st.button("このフレームを生成/再生成", key=f"regen_{frame['id']}", use_container_width=True):
+                if client is None:
+                    st.error("APIモードが未設定です。REALかフェイクを選択してください。")
                 else:
-                    state.frame_paths = updated_paths
-                    state.prompts_data = prompts_data
-                    st.success(f"Frame {frame['id']} を生成しました。")
-    if state.frame_paths and frame["id"] in (state.frame_paths or {}):
-        st.image(state.frame_paths.get(frame["id"]), caption=f"Frame {frame['id']} プレビュー")
-    if len(state.frames) > 2 and st.button("このフレームを削除", key=f"delete_{frame['id']}"):
-        del state.frames[idx]
-        _reindex_frames()
-        st.experimental_rerun()
-    st.markdown("---")
+                    _ensure_run_dir()
+                    prompts_data = {"frames": state.frames}
+                    frame_paths = state.frame_paths or {}
+                    with st.spinner("生成中..."):
+                        try:
+                            updated_paths = regenerate_storyboard_images(
+                                prompts_data,
+                                frame_paths,
+                                run_dir=state.run_dir,
+                                frame_ids=[frame["id"]],
+                                ref_image_path=state.ref_path,
+                                client=client,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            st.error(f"生成に失敗しました: {exc}")
+                        else:
+                            state.frame_paths = updated_paths
+                            state.prompts_data = prompts_data
+                            st.success(f"Frame {frame['id']} を生成しました。")
+        with col_delete:
+            if len(state.frames) > 2 and st.button(
+                "このフレームを削除", key=f"delete_{frame['id']}", use_container_width=True
+            ):
+                del state.frames[idx]
+                _reindex_frames()
+                st.experimental_rerun()
 
 st.subheader("プレビュー一覧")
 if state.frame_paths:
