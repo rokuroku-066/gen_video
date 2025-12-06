@@ -31,7 +31,7 @@ def _make_image_input(path: Path, *, client) -> Any:
     _require_types(fake_mode=False)
     # Prefer inline bytes over file paths to avoid file-uri issues in Veo API.
     data = Path(path).read_bytes()
-    return types.Part.from_bytes(data=data, mime_type=_guess_mime_type(path))
+    return types.Image(image_bytes=data, mime_type=_guess_mime_type(path))
 
 
 def _require_types(fake_mode: bool):
@@ -111,7 +111,6 @@ def generate_segment_for_pair(
                 aspect_ratio=cfg.aspect_ratio,
                 duration_seconds=duration_seconds,
                 last_frame=_make_image_input(frame2_path, client=genai_client),
-                generate_audio=False,  # explicit for Veo 3
             ),
         )
 
@@ -141,7 +140,8 @@ def generate_segment_for_pair(
         generated_videos = _extract_generated_videos(operation, response)
         if generated_videos:
             video_obj = generated_videos[0]
-            genai_client.files.download(file=video_obj.video, download_path=str(output_path))
+            data = genai_client.files.download(file=video_obj.video)
+            Path(output_path).write_bytes(data)
             return str(output_path)
 
         if isinstance(response, dict):

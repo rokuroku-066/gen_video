@@ -145,7 +145,7 @@ if client is None:
     st.warning("APIモードが未設定です。REALかフェイクを選択してください。")
 
 for idx, frame in enumerate(state.frames):
-    with st.container(border=True):
+    with st.container():
         header_col, _ = st.columns([1, 3])
         with header_col:
             st.markdown(f"**Frame {frame['id']}**")
@@ -171,10 +171,10 @@ for idx, frame in enumerate(state.frames):
                     caption=f"Frame {frame['id']} プレビュー",
                 )
 
-        st.divider()
+        st.markdown("---")
         col_regen, col_delete = st.columns(2)
         with col_regen:
-            if st.button("このフレームを生成/再生成", key=f"regen_{frame['id']}", use_container_width=True):
+            if st.button("このフレームを生成/再生成", key=f"regen_{frame['id']}"):
                 if client is None:
                     st.error("APIモードが未設定です。REALかフェイクを選択してください。")
                 else:
@@ -199,7 +199,7 @@ for idx, frame in enumerate(state.frames):
                             st.success(f"Frame {frame['id']} を生成しました。")
         with col_delete:
             if len(state.frames) > 2 and st.button(
-                "このフレームを削除", key=f"delete_{frame['id']}", use_container_width=True
+                "このフレームを削除", key=f"delete_{frame['id']}"
             ):
                 del state.frames[idx]
                 _reindex_frames()
@@ -212,7 +212,7 @@ if state.frame_paths:
         frame_path = state.frame_paths.get(frame_id) if frame_id else None
         if not frame_path:
             continue
-        with st.container(border=True):
+        with st.container():
             st.markdown(f"**Frame {frame_id}**\n\n{frame.get('prompt', '')}")
             st.image(frame_path)
 else:

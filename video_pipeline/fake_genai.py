@@ -66,7 +66,11 @@ class _Operation:
 
 class _Files:
     @staticmethod
-    def download(file: str, download_path: str | None = None):
+    def download(file: str, config: Any | None = None, download_path: str | None = None):
+        """
+        Match the real client signature: download(file, config=None) -> bytes.
+        download_path is accepted for backward compatibility; config is ignored.
+        """
         path = Path(file)
         data = path.read_bytes()
         if download_path:
