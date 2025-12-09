@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/rokuroku-066/gen_video)
+
 # Gemini + Veo マルチセグメント動画ジェネレーター
 
 Geminiテキストモデルのフレームプロンプト、Gemini 2.5 Flash Imageの絵コンテ（ストーリーボード）画像、Veo 3.1の短尺クリップ、`ffmpeg` の結合を組み合わせて、単一クリップより長い動画を生成するStreamlitアプリ兼Pythonパイプラインです。キャラクター・スタイル・カメラ・世界観の一貫性を重視し、オフライン安全なフェイククライアントも備えています。
